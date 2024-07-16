@@ -30,3 +30,9 @@ struct HitRecords {
   __m256 norm_y;
   __m256 norm_z;
 };
+
+struct RayColors {
+  __m256 r;
+  __m256 g;
+  __m256 b;
+};

@@ -40,7 +40,7 @@ static inline __m256 sphere_hit(const RayCluster* rays, float t_max, Sphere sphe
   discrim = _mm256_fmsub_ps(b, b, discrim);
 
   __m256 zeros = _mm256_setzero_ps();
-  __m256 res = _mm256_cmp_ps(discrim, zeros, CMPNLTPS);
+  __m256 res = _mm256_cmp_ps(discrim, zeros, CMPEQPS);
   int no_hit = _mm256_testz_ps(res, res);
 
   if (no_hit) {
