@@ -1,6 +1,12 @@
 #pragma once
 #include <immintrin.h>
 
+struct Vec3Cluster {
+  __m256 x;
+  __m256 y;
+  __m256 z;
+};
+
 struct Sphere {
   float x;
   float y;
