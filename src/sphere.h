@@ -72,6 +72,7 @@ static inline HitRecords create_hit_record(const RayCluster* rays, __m256 t_vals
                                            SphereCluster* sphere_cluster) {
   HitRecords hit_rec;
   hit_rec.t = t_vals;
+  hit_rec.mat_idx = sphere_cluster->mat_idx;
 
   __m256 dir_xt = _mm256_mul_ps(rays->dir_x, t_vals);
   __m256 dir_yt = _mm256_mul_ps(rays->dir_y, t_vals);
@@ -113,20 +114,22 @@ static inline HitRecords create_hit_record(const RayCluster* rays, __m256 t_vals
  */
 // updates a sphere cluster with a sphere given a mask of where to insert the new sphere's values
 static inline void update_sphere_cluster(SphereCluster* curr_cluster, Sphere curr_sphere,
-                                         __m256 update_mask) {
-  __m256 new_spheres_x = _mm256_broadcast_ss(&curr_sphere.x);
-  __m256 new_spheres_y = _mm256_broadcast_ss(&curr_sphere.y);
-  __m256 new_spheres_z = _mm256_broadcast_ss(&curr_sphere.z);
-  __m256 new_spheres_r = _mm256_broadcast_ss(&curr_sphere.r);
+                                         int sphere_idx, __m256 update_mask) {
+  __m256 new_sphere_x = _mm256_broadcast_ss(&curr_sphere.x);
+  __m256 new_sphere_y = _mm256_broadcast_ss(&curr_sphere.y);
+  __m256 new_sphere_z = _mm256_broadcast_ss(&curr_sphere.z);
+  __m256 new_sphere_r = _mm256_broadcast_ss(&curr_sphere.r);
+  __m256i new_mat_idx = _mm256_set1_epi32(sphere_idx);
 
   // preserve new sphere values where a new minimum was found
-  new_spheres_x = _mm256_and_ps(new_spheres_x, update_mask);
-  new_spheres_y = _mm256_and_ps(new_spheres_y, update_mask);
-  new_spheres_z = _mm256_and_ps(new_spheres_z, update_mask);
-  new_spheres_r = _mm256_and_ps(new_spheres_r, update_mask);
+  new_sphere_x = _mm256_and_ps(new_sphere_x, update_mask);
+  new_sphere_y = _mm256_and_ps(new_sphere_y, update_mask);
+  new_sphere_z = _mm256_and_ps(new_sphere_z, update_mask);
+  new_sphere_r = _mm256_and_ps(new_sphere_r, update_mask);
+  new_mat_idx = _mm256_and_ps(new_mat_idx, update_mask);
 
   // set all bits
-  __m256 all_set = _mm256_cmp_ps(new_spheres_x, new_spheres_x, CMPEQPS);
+  __m256 all_set = _mm256_cmp_ps(new_sphere_x, new_sphere_x, CMPEQPS);
   // negation of update locations so we can preserve current values
   // while clearing bits where we will update
   __m256 preserve_curr = _mm256_xor_ps(update_mask, all_set);
@@ -135,11 +138,13 @@ static inline void update_sphere_cluster(SphereCluster* curr_cluster, Sphere cur
   __m256 curr_sphere_y = _mm256_and_ps(curr_cluster->y, preserve_curr);
   __m256 curr_sphere_z = _mm256_and_ps(curr_cluster->z, preserve_curr);
   __m256 curr_sphere_r = _mm256_and_ps(curr_cluster->r, preserve_curr);
+  __m256 curr_mat_idx = _mm256_and_ps(curr_cluster->mat_idx, preserve_curr);
 
-  curr_cluster->x = _mm256_add_ps(new_spheres_x, curr_sphere_x);
-  curr_cluster->y = _mm256_add_ps(new_spheres_y, curr_sphere_y);
-  curr_cluster->z = _mm256_add_ps(new_spheres_z, curr_sphere_z);
-  curr_cluster->r = _mm256_add_ps(new_spheres_r, curr_sphere_r);
+  curr_cluster->x = _mm256_add_ps(new_sphere_x, curr_sphere_x);
+  curr_cluster->y = _mm256_add_ps(new_sphere_y, curr_sphere_y);
+  curr_cluster->z = _mm256_add_ps(new_sphere_z, curr_sphere_z);
+  curr_cluster->r = _mm256_add_ps(new_sphere_r, curr_sphere_r);
+  curr_cluster->mat_idx = _mm256_add_ps(new_mat_idx, curr_mat_idx);
 };
 
 static inline HitRecords find_sphere_hits(const Sphere* spheres, const RayCluster* rays,
@@ -149,6 +154,7 @@ static inline HitRecords find_sphere_hits(const Sphere* spheres, const RayCluste
       .y = _mm256_setzero_ps(),
       .z = _mm256_setzero_ps(),
       .r = _mm256_setzero_ps(),
+      .mat_idx = _mm256_setzero_si256(),
   };
 
   __m256 zeros = _mm256_setzero_ps();
@@ -159,7 +165,7 @@ static inline HitRecords find_sphere_hits(const Sphere* spheres, const RayCluste
   __m256 zero_loc = _mm256_cmp_ps(lowest_t_vals, zeros, CMPEQPS);
   __m256 inf_t_mask = _mm256_and_ps(zero_loc, infs);
   __m256 lower_locs = _mm256_cmp_ps(lowest_t_vals, inf_t_mask, CMPLTPS);
-  update_sphere_cluster(&closest_spheres, spheres[0], lower_locs);
+  update_sphere_cluster(&closest_spheres, spheres[0], 0, lower_locs);
 
   for (int i = 1; i < SPHERE_NUM; i++) {
     __m256 t_vals = sphere_hit(rays, t_max, spheres[i]);
@@ -172,7 +178,7 @@ static inline HitRecords find_sphere_hits(const Sphere* spheres, const RayCluste
 
     __m256 inf_t_mask = _mm256_and_ps(zero_loc, infs);
     __m256 lower_locs = _mm256_cmp_ps(lowest_t_vals, inf_t_mask, CMPLTPS);
-    update_sphere_cluster(&closest_spheres, spheres[i], lower_locs);
+    update_sphere_cluster(&closest_spheres, spheres[i], i, lower_locs);
 
     // use inf where t == 0 in new t values to preserve current
     // values in lowest_t_vals as to not write over actual hit points

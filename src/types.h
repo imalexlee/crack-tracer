@@ -1,17 +1,27 @@
 #pragma once
 #include <immintrin.h>
 
-struct Vec3Cluster {
-  __m256 x;
-  __m256 y;
-  __m256 z;
+struct Color {
+  float r;
+  float g;
+  float b;
 };
 
-struct Sphere {
+struct Colors {
+  __m256 r;
+  __m256 g;
+  __m256 b;
+};
+
+struct alignas(16) Sphere {
   float x;
   float y;
   float z;
   float r;
+};
+
+struct Material {
+  Colors attenuation;
 };
 
 struct SphereCluster {
@@ -19,6 +29,7 @@ struct SphereCluster {
   __m256 y;
   __m256 z;
   __m256 r;
+  __m256i mat_idx;
 };
 
 struct RayCluster {
@@ -35,10 +46,5 @@ struct HitRecords {
   __m256 norm_x;
   __m256 norm_y;
   __m256 norm_z;
-};
-
-struct RayColors {
-  __m256 r;
-  __m256 g;
-  __m256 b;
+  __m256i mat_idx;
 };
