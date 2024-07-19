@@ -81,11 +81,11 @@ inline static void update_colors(Color_256* curr_colors, const Color_256* new_co
       .b = global::white,
   };
 
-  for (uint8_t i = 0; i < depth; i++) {
+  for (int i = 0; i < depth; i++) {
 
     hit_rec = find_sphere_hits(spheres, rays, INFINITY);
 
-    __m256 new_hit_mask = _mm256_cmp_ps(hit_rec.t, zeros, CMPEQPS);
+    __m256 new_hit_mask = _mm256_cmp_ps(hit_rec.t, zeros, CMPEQ);
     if (_mm256_testz_ps(new_hit_mask, new_hit_mask)) {
       break;
     }

@@ -2,6 +2,7 @@
 #include "constants.h"
 #include "globals.h"
 #include "types.h"
+#include <cfloat>
 #include <immintrin.h>
 
 // Returns hit t values or 0 depending on if this ray hit this sphere or not
@@ -41,7 +42,7 @@
   discrim = _mm256_fmsub_ps(b, b, discrim);
 
   __m256 zeros = _mm256_setzero_ps();
-  __m256 res = _mm256_cmp_ps(discrim, zeros, CMPLTPS);
+  __m256 res = _mm256_cmp_ps(discrim, zeros, CMPLT);
   int no_hit = _mm256_testz_ps(res, res);
 
   if (no_hit) {
@@ -62,7 +63,7 @@
 
   // allow through roots within the max t value
   __m256 t_max_vec = _mm256_broadcast_ss(&t_max);
-  res = _mm256_cmp_ps(root, t_max_vec, CMPLTPS);
+  res = _mm256_cmp_ps(root, t_max_vec, CMPLT);
   root = _mm256_and_ps(root, res);
 
   return root;
@@ -161,31 +162,40 @@ static inline void update_sphere_cluster(SphereCluster* curr_cluster, Sphere cur
   };
 
   __m256 zeros = _mm256_setzero_ps();
-  __m256 infs = _mm256_broadcast_ss(&FLOAT_INF);
+  __m256 max = _mm256_broadcast_ss(&FLOAT_MAX);
 
   // find first sphere as a baseline
   __m256 lowest_t_vals = sphere_hit(rays, t_max, spheres[0]);
-  __m256 zero_loc = _mm256_cmp_ps(lowest_t_vals, zeros, CMPEQPS);
-  __m256 inf_t_mask = _mm256_and_ps(zero_loc, infs);
-  __m256 lower_locs = _mm256_cmp_ps(lowest_t_vals, inf_t_mask, CMPLTPS);
-  update_sphere_cluster(&closest_spheres, spheres[0], lower_locs);
+  __m256 hit_loc = _mm256_cmp_ps(lowest_t_vals, zeros, CMPNEQ);
+  update_sphere_cluster(&closest_spheres, spheres[0], hit_loc);
 
   for (int i = 1; i < SPHERE_NUM; i++) {
-    __m256 t_vals = sphere_hit(rays, t_max, spheres[i]);
-    __m256 hit_loc = _mm256_cmp_ps(t_vals, zeros, CMPNEQ);
+    __m256 new_t_vals = sphere_hit(rays, t_max, spheres[i]);
+
     // don't update on instances of no hits (hit locations all zeros)
+    hit_loc = _mm256_cmp_ps(new_t_vals, zeros, CMPNEQ);
     if (_mm256_testz_ps(hit_loc, hit_loc)) {
       continue;
     }
-    // TODO: I think this is wrong. test update sphere cluster first
-    __m256 zero_loc = _mm256_cmp_ps(t_vals, zeros, CMPEQPS);
-    __m256 inf_t_mask = _mm256_and_ps(zero_loc, infs);
-    __m256 lower_locs = _mm256_cmp_ps(lowest_t_vals, inf_t_mask, CMPLTPS);
-    update_sphere_cluster(&closest_spheres, spheres[i], lower_locs);
 
-    // use inf where t == 0 in new t values to preserve current
-    // values in lowest_t_vals as to not write over actual hit points
-    lowest_t_vals = _mm256_min_ps(lowest_t_vals, inf_t_mask);
+    // replace all 0's with float maximum to not replace actual values with
+    // 0's during the minimum comparisons. Again, 0's represent no hits
+    __m256 no_hit_loc = _mm256_xor_ps(hit_loc, global::all_set);
+    __m256 max_mask = _mm256_and_ps(no_hit_loc, max);
+    __m256 lowest_t_masked = _mm256_or_ps(lowest_t_vals, max_mask);
+    new_t_vals = _mm256_or_ps(new_t_vals, max_mask);
+
+    // update sphere references based on where new
+    // t values are closer than the current lowest
+    __m256 update_locs = _mm256_cmp_ps(new_t_vals, lowest_t_masked, CMPLT);
+    update_sphere_cluster(&closest_spheres, spheres[i], update_locs);
+
+    // update current lowest t values based on new t's, however, mask out
+    // where we put float max values so that the t values still represent
+    // no hits as 0.0
+    lowest_t_vals = _mm256_min_ps(lowest_t_masked, new_t_vals);
+    __m256 actual_vals_loc = _mm256_cmp_ps(lowest_t_vals, max, CMPNEQ);
+    lowest_t_vals = _mm256_and_ps(lowest_t_vals, actual_vals_loc);
   }
 
   return create_hit_record(rays, lowest_t_vals, &closest_spheres);
