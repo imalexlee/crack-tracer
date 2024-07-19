@@ -1,5 +1,6 @@
 #pragma once
 #include "constants.h"
+#include "globals.h"
 #include "types.h"
 #include <immintrin.h>
 
@@ -47,8 +48,7 @@
     return zeros;
   }
 
-  __m256 all_set = _mm256_cmp_ps(res, res, CMPEQPS);
-  __m256 hits = _mm256_xor_ps(res, all_set);
+  __m256 hits = _mm256_xor_ps(res, global::all_set);
   // mask out the discriminants and b where < 0. ie, no hits
   discrim = _mm256_and_ps(discrim, hits);
   b = _mm256_and_ps(b, hits);
@@ -72,7 +72,7 @@
                                                          SphereCluster* sphere_cluster) {
   HitRecords hit_rec;
   hit_rec.t = t_vals;
-  hit_rec.mat_idx = sphere_cluster->mat_idx;
+  hit_rec.mat = sphere_cluster->mat;
 
   __m256 dir_xt = _mm256_mul_ps(rays->dir.x, t_vals);
   __m256 dir_yt = _mm256_mul_ps(rays->dir.y, t_vals);
@@ -114,37 +114,43 @@
  */
 // updates a sphere cluster with a sphere given a mask of where to insert the new sphere's values
 static inline void update_sphere_cluster(SphereCluster* curr_cluster, Sphere curr_sphere,
-                                         int sphere_idx, __m256 update_mask) {
+                                         __m256 update_mask) {
   __m256 new_sphere_x = _mm256_broadcast_ss(&curr_sphere.center.x);
   __m256 new_sphere_y = _mm256_broadcast_ss(&curr_sphere.center.y);
   __m256 new_sphere_z = _mm256_broadcast_ss(&curr_sphere.center.z);
   __m256 new_sphere_r = _mm256_broadcast_ss(&curr_sphere.r);
-  __m256i new_mat_idx = _mm256_set1_epi32(sphere_idx);
+  __m256 new_sphere_atten_r = _mm256_broadcast_ss(&curr_sphere.mat.atten.r);
+  __m256 new_sphere_atten_g = _mm256_broadcast_ss(&curr_sphere.mat.atten.g);
+  __m256 new_sphere_atten_b = _mm256_broadcast_ss(&curr_sphere.mat.atten.b);
 
   // preserve new sphere values where a new minimum was found
   new_sphere_x = _mm256_and_ps(new_sphere_x, update_mask);
   new_sphere_y = _mm256_and_ps(new_sphere_y, update_mask);
   new_sphere_z = _mm256_and_ps(new_sphere_z, update_mask);
   new_sphere_r = _mm256_and_ps(new_sphere_r, update_mask);
-  new_mat_idx = _mm256_and_si256(new_mat_idx, (__m256i)update_mask);
+  new_sphere_atten_r = _mm256_and_ps(new_sphere_atten_r, update_mask);
+  new_sphere_atten_g = _mm256_and_ps(new_sphere_atten_g, update_mask);
+  new_sphere_atten_b = _mm256_and_ps(new_sphere_atten_b, update_mask);
 
-  // set all bits
-  __m256 all_set = _mm256_cmp_ps(new_sphere_x, new_sphere_x, CMPEQPS);
   // negation of update locations so we can preserve current values
   // while clearing bits where we will update
-  __m256 preserve_curr = _mm256_xor_ps(update_mask, all_set);
+  __m256 preserve_curr = _mm256_xor_ps(update_mask, global::all_set);
 
   __m256 curr_sphere_x = _mm256_and_ps(curr_cluster->center.x, preserve_curr);
   __m256 curr_sphere_y = _mm256_and_ps(curr_cluster->center.y, preserve_curr);
   __m256 curr_sphere_z = _mm256_and_ps(curr_cluster->center.z, preserve_curr);
   __m256 curr_sphere_r = _mm256_and_ps(curr_cluster->r, preserve_curr);
-  __m256i curr_mat_idx = _mm256_and_si256(curr_cluster->mat_idx, (__m256i)preserve_curr);
+  __m256 curr_sphere_atten_r = _mm256_and_ps(curr_cluster->mat.atten.r, preserve_curr);
+  __m256 curr_sphere_atten_g = _mm256_and_ps(curr_cluster->mat.atten.g, preserve_curr);
+  __m256 curr_sphere_atten_b = _mm256_and_ps(curr_cluster->mat.atten.b, preserve_curr);
 
   curr_cluster->center.x = _mm256_add_ps(new_sphere_x, curr_sphere_x);
   curr_cluster->center.y = _mm256_add_ps(new_sphere_y, curr_sphere_y);
   curr_cluster->center.z = _mm256_add_ps(new_sphere_z, curr_sphere_z);
   curr_cluster->r = _mm256_add_ps(new_sphere_r, curr_sphere_r);
-  curr_cluster->mat_idx = _mm256_and_si256(new_mat_idx, curr_mat_idx);
+  curr_cluster->mat.atten.r = _mm256_add_ps(new_sphere_atten_r, curr_sphere_atten_r);
+  curr_cluster->mat.atten.g = _mm256_add_ps(new_sphere_atten_g, curr_sphere_atten_g);
+  curr_cluster->mat.atten.b = _mm256_add_ps(new_sphere_atten_b, curr_sphere_atten_b);
 };
 
 [[nodiscard]] static inline HitRecords find_sphere_hits(const Sphere* spheres,
@@ -152,7 +158,6 @@ static inline void update_sphere_cluster(SphereCluster* curr_cluster, Sphere cur
   SphereCluster closest_spheres{
       .center = {.x = _mm256_setzero_ps(), .y = _mm256_setzero_ps(), .z = _mm256_setzero_ps()},
       .r = _mm256_setzero_ps(),
-      .mat_idx = _mm256_setzero_si256(),
   };
 
   __m256 zeros = _mm256_setzero_ps();
@@ -163,20 +168,20 @@ static inline void update_sphere_cluster(SphereCluster* curr_cluster, Sphere cur
   __m256 zero_loc = _mm256_cmp_ps(lowest_t_vals, zeros, CMPEQPS);
   __m256 inf_t_mask = _mm256_and_ps(zero_loc, infs);
   __m256 lower_locs = _mm256_cmp_ps(lowest_t_vals, inf_t_mask, CMPLTPS);
-  update_sphere_cluster(&closest_spheres, spheres[0], 0, lower_locs);
+  update_sphere_cluster(&closest_spheres, spheres[0], lower_locs);
 
   for (int i = 1; i < SPHERE_NUM; i++) {
     __m256 t_vals = sphere_hit(rays, t_max, spheres[i]);
-    __m256 zero_loc = _mm256_cmp_ps(t_vals, zeros, CMPEQPS);
-
-    // don't update on instances of no hits
-    if (_mm256_testz_ps(zero_loc, zero_loc)) {
+    __m256 hit_loc = _mm256_cmp_ps(t_vals, zeros, CMPNEQ);
+    // don't update on instances of no hits (hit locations all zeros)
+    if (_mm256_testz_ps(hit_loc, hit_loc)) {
       continue;
     }
-
+    // TODO: I think this is wrong. test update sphere cluster first
+    __m256 zero_loc = _mm256_cmp_ps(t_vals, zeros, CMPEQPS);
     __m256 inf_t_mask = _mm256_and_ps(zero_loc, infs);
     __m256 lower_locs = _mm256_cmp_ps(lowest_t_vals, inf_t_mask, CMPLTPS);
-    update_sphere_cluster(&closest_spheres, spheres[i], i, lower_locs);
+    update_sphere_cluster(&closest_spheres, spheres[i], lower_locs);
 
     // use inf where t == 0 in new t values to preserve current
     // values in lowest_t_vals as to not write over actual hit points

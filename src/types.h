@@ -1,10 +1,10 @@
 #pragma once
 #include <immintrin.h>
 
-struct Color {
-  float r;
-  float g;
-  float b;
+struct Vec3 {
+  float x;
+  float y;
+  float z;
 };
 
 struct Vec3_256 {
@@ -13,31 +13,36 @@ struct Vec3_256 {
   __m256 z;
 };
 
-struct Vec3 {
-  float x;
-  float y;
-  float z;
+struct Color {
+  float r;
+  float g;
+  float b;
 };
 
-struct Colors {
+struct Color_256 {
   __m256 r;
   __m256 g;
   __m256 b;
 };
 
-struct alignas(16) Sphere {
-  Vec3 center;
-  float r;
+struct alignas(16) Material {
+  Color atten;
 };
 
-struct Material {
-  Colors attenuation;
+struct Material_256 {
+  Color_256 atten;
+};
+
+struct alignas(32) Sphere {
+  Vec3 center;
+  Material mat;
+  float r;
 };
 
 struct SphereCluster {
   Vec3_256 center;
+  Material_256 mat;
   __m256 r;
-  __m256i mat_idx;
 };
 
 struct RayCluster {
@@ -47,6 +52,6 @@ struct RayCluster {
 struct HitRecords {
   Vec3_256 orig;
   Vec3_256 norm;
+  Material_256 mat;
   __m256 t;
-  __m256i mat_idx;
 };

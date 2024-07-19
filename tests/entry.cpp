@@ -12,8 +12,19 @@ const RayCluster rays{.dir = {
                           .z = _mm256_set_ps(-1.f, -1.f, -1.f, -1.f, -1.f, -1.f, -1.f, -1.f),
                       }};
 
+constexpr Color silver = {
+    .r = 0.66f,
+    .g = 0.66f,
+    .b = 0.66f,
+};
+
+constexpr Material materials[SPHERE_NUM] = {{
+    .atten = silver,
+}};
+
 const Sphere sphere{
     .center = {.x = 0.f, .y = 0.f, .z = -1.f},
+    .mat = materials[0],
     .r = .5f,
 };
 
@@ -44,7 +55,7 @@ void test_update_sphere_cluster() {
   float set = *((float*)&a);
 
   __m256 mask = _mm256_set_ps(set, 0.f, set, 0.f, set, 0.f, set, 0.f);
-  update_sphere_cluster(&sphere_cluster, rando_sphere1, 0, mask);
+  update_sphere_cluster(&sphere_cluster, rando_sphere1, mask);
 
   printf("iter 1\n");
   print_vec_256(sphere_cluster.center.x);
@@ -53,7 +64,7 @@ void test_update_sphere_cluster() {
   print_vec_256(sphere_cluster.r);
 
   mask = _mm256_set_ps(0.f, 0.f, 0.f, set, set, set, set, 0.f);
-  update_sphere_cluster(&sphere_cluster, rando_sphere2, 0, mask);
+  update_sphere_cluster(&sphere_cluster, rando_sphere2, mask);
 
   printf("iter 2\n");
   print_vec_256(sphere_cluster.center.x);
