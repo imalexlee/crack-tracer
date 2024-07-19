@@ -7,6 +7,18 @@ struct Color {
   float b;
 };
 
+struct Vec3_256 {
+  __m256 x;
+  __m256 y;
+  __m256 z;
+};
+
+struct Vec3 {
+  float x;
+  float y;
+  float z;
+};
+
 struct Colors {
   __m256 r;
   __m256 g;
@@ -14,9 +26,7 @@ struct Colors {
 };
 
 struct alignas(16) Sphere {
-  float x;
-  float y;
-  float z;
+  Vec3 center;
   float r;
 };
 
@@ -25,26 +35,18 @@ struct Material {
 };
 
 struct SphereCluster {
-  __m256 x;
-  __m256 y;
-  __m256 z;
+  Vec3_256 center;
   __m256 r;
   __m256i mat_idx;
 };
 
 struct RayCluster {
-  __m256 dir_x;
-  __m256 dir_y;
-  __m256 dir_z;
+  Vec3_256 dir;
 };
 
 struct HitRecords {
+  Vec3_256 orig;
+  Vec3_256 norm;
   __m256 t;
-  __m256 orig_x;
-  __m256 orig_y;
-  __m256 orig_z;
-  __m256 norm_x;
-  __m256 norm_y;
-  __m256 norm_z;
   __m256i mat_idx;
 };

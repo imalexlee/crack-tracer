@@ -1,4 +1,5 @@
 #include "constants.h"
+#include "math.h"
 #include "sphere.h"
 #include "types.h"
 #include <cmath>
@@ -14,9 +15,7 @@ constexpr Color silver = {
 };
 
 constexpr Sphere spheres[SPHERE_NUM] = {{
-    .x = 0.f,
-    .y = 0.f,
-    .z = -1.f,
+    .center = {.x = 0.f, .y = 0.f, .z = -1.f},
     .r = 0.5f,
 }};
 
@@ -38,29 +37,14 @@ constexpr Colors blue_sky = {
 
 constexpr __m256 white = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f};
 
-constexpr __m256 reflect_scale = {
-    2.f, 2.f, 2.f, 2.f, 2.f, 2.f, 2.f, 2.f,
-};
-
 void scatter_metallic(RayCluster* rays, const HitRecords* hit_rec) {
   // reflect ray direction about the hit record normal
-  __m256 reflected_dot = _mm256_mul_ps(rays->dir_x, hit_rec->norm_x);
-  reflected_dot = _mm256_fmadd_ps(rays->dir_y, hit_rec->norm_y, reflected_dot);
-  reflected_dot = _mm256_fmadd_ps(rays->dir_z, hit_rec->norm_z, reflected_dot);
-
-  __m256 scaled_norm_x = _mm256_mul_ps(hit_rec->norm_x, reflect_scale);
-  __m256 scaled_norm_y = _mm256_mul_ps(hit_rec->norm_y, reflect_scale);
-  __m256 scaled_norm_z = _mm256_mul_ps(hit_rec->norm_z, reflect_scale);
-
-  rays->dir_x = _mm256_sub_ps(rays->dir_x, scaled_norm_x);
-  rays->dir_y = _mm256_sub_ps(rays->dir_y, scaled_norm_y);
-  rays->dir_z = _mm256_sub_ps(rays->dir_z, scaled_norm_z);
-
-  // TODO: idek man this is kinda crazy rn we'll see
+  reflect(&rays->dir, &hit_rec->norm);
+  normalize(&rays->dir);
 };
 
-alignas(32) int mat_indices[8];
 Colors ray_cluster_colors(RayCluster* rays, const Sphere* spheres, uint8_t depth) {
+  alignas(32) static int mat_indices[8];
   __m256 zeros = _mm256_setzero_ps();
   // will be used to add a sky tint to rays that at some point bounce off into space.
   // if a ray never bounces away (within amount of bounces set by depth), the
@@ -103,11 +87,11 @@ Colors ray_cluster_colors(RayCluster* rays, const Sphere* spheres, uint8_t depth
 
 int main() {
 
-  RayCluster rays = {
-      .dir_x = _mm256_setzero_ps(),
-      .dir_y = _mm256_setzero_ps(),
-      .dir_z = {-1.f, -1.f, -1.f, -1.f, -1.f, -1.f, -1.f, -1.f},
-  };
+  RayCluster rays = {.dir = {
+                         .x = _mm256_setzero_ps(),
+                         .y = _mm256_setzero_ps(),
+                         .z = {-1.f, -1.f, -1.f, -1.f, -1.f, -1.f, -1.f, -1.f},
+                     }};
 
   // TODO: get rays
   Colors colors = ray_cluster_colors(&rays, spheres, RAY_DEPTH);
