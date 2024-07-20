@@ -104,3 +104,65 @@ inline static void update_colors(Color_256* curr_colors, const Color_256* new_co
 
   return colors;
 };
+
+// gets us the first pixels row of sample directions.
+// subsequent render iterations will simply scale this by row and column index
+// to find where to take samples
+consteval RayCluster generate_init_directions() {
+
+  Vec3 top_left{
+      .x = CAM_ORIGIN[0] - VIEWPORT_WIDTH / 2,
+      .y = CAM_ORIGIN[1] + VIEWPORT_HEIGHT / 2,
+      .z = CAM_ORIGIN[2] - FOCAL_LEN,
+  };
+
+  top_left.x += SAMPLE_DU;
+  top_left.y += SAMPLE_DV;
+
+  alignas(32) float x_arr[8];
+  for (int i = 0; i < 8; i++) {
+    int scale = 1 + i;
+    x_arr[i] = top_left.x * scale;
+  }
+
+  RayCluster init_dirs = {
+      .dir =
+          {
+              .x = {x_arr[0], x_arr[1], x_arr[2], x_arr[3], x_arr[4], x_arr[5], x_arr[6], x_arr[7]},
+              .y = {top_left.y, top_left.y, top_left.y, top_left.y, top_left.y, top_left.y,
+                    top_left.y, top_left.y},
+              .z = {top_left.z, top_left.z, top_left.z, top_left.z, top_left.z, top_left.z,
+                    top_left.z, top_left.z},
+          },
+
+  };
+
+  return init_dirs;
+}
+
+inline static void render() {
+  static_assert((IMG_HEIGHT * IMG_WIDTH) % 8 == 0,
+                "image size shall be divisible by 8 until I handle that case lol");
+  constexpr RayCluster base_dirs = generate_init_directions();
+
+  uint16_t row, col, sample_group;
+  for (row = 0; row < IMG_HEIGHT; row++) {
+    for (col = 0; col < IMG_WIDTH; col++) {
+      // 64 samples per pixel. 8 rays calculated 8 times
+      for (sample_group = 0; sample_group < 8; sample_group++) {
+
+        RayCluster samples = base_dirs;
+        float x_scale = PIX_DU * col;
+        float y_scale = PIX_DV * row;
+
+        __m256 x_scale_vec = _mm256_broadcast_ss(&x_scale);
+        __m256 y_scale_vec = _mm256_broadcast_ss(&y_scale);
+
+        samples.dir.x = _mm256_add_ps(samples.dir.x, x_scale_vec);
+        samples.dir.y = _mm256_add_ps(samples.dir.y, y_scale_vec);
+
+        // TODO: send ray cluster to color function then accumulate colors
+      }
+    }
+  }
+}
