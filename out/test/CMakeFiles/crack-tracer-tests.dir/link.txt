@@ -1,1 +1,0 @@
-/usr/bin/c++ -g CMakeFiles/crack-tracer-tests.dir/entry.cpp.o -o crack-tracer-tests 

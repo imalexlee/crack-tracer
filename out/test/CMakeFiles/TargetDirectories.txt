@@ -1,3 +1,0 @@
-/home/alexlee/Desktop/crack-tracer/out/test/CMakeFiles/crack-tracer-tests.dir
-/home/alexlee/Desktop/crack-tracer/out/test/CMakeFiles/edit_cache.dir
-/home/alexlee/Desktop/crack-tracer/out/test/CMakeFiles/rebuild_cache.dir

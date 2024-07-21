@@ -1,7 +1,0 @@
-[
-{
-  "directory": "/home/alexlee/Desktop/crack-tracer/out/release",
-  "command": "/usr/bin/c++  -isystem /home/alexlee/Desktop/crack-tracer/thirdparty/stb_image_write -O3 -DNDEBUG -Wno-missing-field-initializers -march=native -Ofast -fno-signed-zeros -flto -Wall -Wextra -std=gnu++20 -o CMakeFiles/crack-tracer.dir/src/entry.cpp.o -c /home/alexlee/Desktop/crack-tracer/src/entry.cpp",
-  "file": "/home/alexlee/Desktop/crack-tracer/src/entry.cpp"
-}
-]

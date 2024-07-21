@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/crack-tracer.dir/src/entry.cpp.o -o crack-tracer  /usr/lib/x86_64-linux-gnu/libglfw.so.3.3 
