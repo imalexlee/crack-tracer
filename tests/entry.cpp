@@ -1,9 +1,13 @@
 #include "../src/math.h"
 #include "../src/sphere.h"
 #include "../src/utils.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <immintrin.h>
 
 const RayCluster rays{.dir = {
@@ -115,11 +119,41 @@ void test_normalize() {
   printf("\n");
 }
 
+void test_image_write() {
+  printf("TESTING IMAGE_WRITE\n");
+
+  uint16_t row, col;
+  uint32_t write_pos;
+  Color final_color = {
+      .r = 255.f,
+      .g = 0.f,
+      .b = 255.f,
+  };
+
+  CharColor char_color;
+  CharColor* data = (CharColor*)malloc((IMG_WIDTH * IMG_HEIGHT) * 3);
+
+  for (row = 0; row < IMG_HEIGHT; row++) {
+    for (col = 0; col < IMG_WIDTH; col++) {
+      write_pos = col + row * IMG_WIDTH;
+
+      char_color.r = final_color.r;
+      char_color.g = final_color.g;
+      char_color.b = final_color.b;
+      data[write_pos] = char_color;
+    }
+  }
+
+  stbi_write_png("test.png", IMG_WIDTH, IMG_HEIGHT, 3, data, IMG_WIDTH * 3);
+  printf("TESTING IMAGE_WRITE\n");
+}
+
 int main() {
   test_sphere_hit();
   test_update_sphere_cluster();
   test_reflect();
   test_dot();
   test_normalize();
+  test_image_write();
   return 0;
 }

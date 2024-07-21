@@ -26,3 +26,6 @@ target_compile_options(
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE glfw)
+
+target_include_directories(${PROJECT_NAME} SYSTEM
+                           PRIVATE thirdparty/stb_image_write)

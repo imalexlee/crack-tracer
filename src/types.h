@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <immintrin.h>
 
 struct Vec3 {
@@ -17,6 +18,12 @@ struct Color {
   float r;
   float g;
   float b;
+};
+
+struct CharColor {
+  uint8_t r;
+  uint8_t g;
+  uint8_t b;
 };
 
 struct Color_256 {

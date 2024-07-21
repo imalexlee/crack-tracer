@@ -4,10 +4,12 @@
 #include "math.h"
 #include "sphere.h"
 #include "types.h"
+#include "utils.h"
 #include <cmath>
 #include <csignal>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <immintrin.h>
 
 constexpr Color_256 silver_attenuation = {
@@ -120,9 +122,9 @@ consteval RayCluster generate_init_directions() {
   top_left.y += SAMPLE_DV;
 
   alignas(32) float x_arr[8];
-  for (int i = 0; i < 8; i++) {
-    int scale = 1 + i;
-    x_arr[i] = top_left.x * scale;
+  x_arr[0] = top_left.x;
+  for (int i = 1; i < 8; i++) {
+    x_arr[i] = x_arr[i - 1] + SAMPLE_DU;
   }
 
   RayCluster init_dirs = {
@@ -140,14 +142,24 @@ consteval RayCluster generate_init_directions() {
   return init_dirs;
 }
 
-inline static void render() {
+inline static void render(CharColor* data) {
   static_assert((IMG_HEIGHT * IMG_WIDTH) % 8 == 0,
                 "image size shall be divisible by 8 until I handle that case lol");
   constexpr RayCluster base_dirs = generate_init_directions();
+  BREAKPOINT
 
+  Color_256 sample_color;
+  Color final_color;
+  CharColor char_color;
+  uint32_t write_pos;
   uint16_t row, col, sample_group;
+
   for (row = 0; row < IMG_HEIGHT; row++) {
     for (col = 0; col < IMG_WIDTH; col++) {
+
+      sample_color.r = _mm256_setzero_ps();
+      sample_color.g = _mm256_setzero_ps();
+      sample_color.b = _mm256_setzero_ps();
       // 64 samples per pixel. 8 rays calculated 8 times
       for (sample_group = 0; sample_group < 8; sample_group++) {
 
@@ -161,8 +173,35 @@ inline static void render() {
         samples.dir.x = _mm256_add_ps(samples.dir.x, x_scale_vec);
         samples.dir.y = _mm256_add_ps(samples.dir.y, y_scale_vec);
 
-        // TODO: send ray cluster to color function then accumulate colors
+        Color_256 new_colors = ray_cluster_colors(&samples, spheres, 10);
+        sample_color.r = _mm256_add_ps(sample_color.r, new_colors.r);
+        sample_color.g = _mm256_add_ps(sample_color.g, new_colors.g);
+        sample_color.b = _mm256_add_ps(sample_color.b, new_colors.b);
       }
+      // accumulate all color channels into first float of vec
+      sample_color.r = _mm256_hadd_ps(sample_color.r, sample_color.r);
+      sample_color.r = _mm256_hadd_ps(sample_color.r, sample_color.r);
+      sample_color.r = _mm256_hadd_ps(sample_color.r, sample_color.r);
+
+      sample_color.g = _mm256_hadd_ps(sample_color.g, sample_color.g);
+      sample_color.g = _mm256_hadd_ps(sample_color.g, sample_color.g);
+      sample_color.g = _mm256_hadd_ps(sample_color.g, sample_color.g);
+
+      sample_color.b = _mm256_hadd_ps(sample_color.b, sample_color.b);
+      sample_color.b = _mm256_hadd_ps(sample_color.b, sample_color.b);
+      sample_color.b = _mm256_hadd_ps(sample_color.b, sample_color.b);
+
+      _mm_store_ss(&final_color.r, _mm256_castps256_ps128(sample_color.r));
+      _mm_store_ss(&final_color.g, _mm256_castps256_ps128(sample_color.g));
+      _mm_store_ss(&final_color.b, _mm256_castps256_ps128(sample_color.b));
+
+      // average by sample count. color / 64
+      char_color.r = final_color.r * COLOR_MULTIPLIER;
+      char_color.g = final_color.g * COLOR_MULTIPLIER;
+      char_color.b = final_color.b * COLOR_MULTIPLIER;
+
+      write_pos = col + row * IMG_WIDTH;
+      data[write_pos] = char_color;
     }
   }
 }

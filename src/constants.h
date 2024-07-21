@@ -21,4 +21,5 @@ constexpr float PIX_DV = -VIEWPORT_HEIGHT / IMG_HEIGHT;
 constexpr float SAMPLE_DU = PIX_DU / 9;
 constexpr float SAMPLE_DV = PIX_DV / 9;
 constexpr float FOCAL_LEN = 1.0;
+constexpr float COLOR_MULTIPLIER = 255.f / 64;
 alignas(32) constexpr float CAM_ORIGIN[4] = {0.f, 0.f, 0.f, 0.f};

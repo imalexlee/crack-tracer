@@ -9,3 +9,6 @@ add_executable(${PROJECT_NAME} entry.cpp)
 
 target_compile_options(${PROJECT_NAME}
                        PRIVATE "$<$<CONFIG:DEBUG>:-g;-march=native>")
+
+target_include_directories(${PROJECT_NAME} SYSTEM
+                           PRIVATE ../thirdparty/stb_image_write)
