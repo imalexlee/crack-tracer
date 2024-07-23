@@ -24,15 +24,15 @@ constexpr Color silver = {
     .b = 0.66f,
 };
 
-constexpr Material materials[SPHERE_NUM] = {{
-    .atten = silver,
-}};
+constexpr Material materials[SPHERE_NUM] = {
+    {.atten = silver},
+    //{.atten = silver},
+};
 
-constexpr Sphere spheres[SPHERE_NUM] = {{
-    .center = {.x = 0.f, .y = 0.f, .z = -1.f},
-    .mat = materials[0],
-    .r = 0.5f,
-}};
+constexpr Sphere spheres[SPHERE_NUM] = {
+    {.center = {.x = 0.f, .y = -100.5f, .z = -1.f}, .mat = materials[0], .r = 100.f},
+    {.center = {.x = 0.f, .y = 0.f, .z = -1.f}, .mat = materials[0], .r = 0.5f},
+};
 
 constexpr Color_256 sky = {
     .r = {0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f},
@@ -75,7 +75,7 @@ inline static void update_colors(Color_256* curr_colors, const Color_256* new_co
   // will be used to add a sky tint to rays that at some point bounce off into space.
   // if a ray never bounces away (within amount of bounces set by depth), the
   // hit_mask will be all set (packed floats) and the sky tint will not affect its final color
-  __m256 hit_mask = zeros;
+  __m256 no_hit_mask = zeros;
   HitRecords hit_rec;
   Color_256 colors{
       .r = global::white,
@@ -87,21 +87,19 @@ inline static void update_colors(Color_256* curr_colors, const Color_256* new_co
 
     hit_rec = find_sphere_hits(spheres, rays, INFINITY);
 
-    __m256 new_hit_mask = _mm256_cmp_ps(hit_rec.t, zeros, CMPEQ);
+    __m256 new_hit_mask = _mm256_cmp_ps(hit_rec.t, zeros, CMPNLE);
+    // or a mask when a value is not a hit, at any point. if all are zero,
+    // break
+    __m256 new_no_hit_mask = _mm256_xor_ps(new_hit_mask, global::all_set);
+    no_hit_mask = _mm256_or_ps(no_hit_mask, new_no_hit_mask);
     if (_mm256_testz_ps(new_hit_mask, new_hit_mask)) {
       break;
     }
 
     scatter_metallic(rays, &hit_rec);
     update_colors(&colors, &hit_rec.mat.atten, new_hit_mask);
-
-    // update where any rays bounced off into space (no hits)
-    hit_mask = _mm256_or_ps(hit_mask, new_hit_mask);
   }
 
-  // negate hits since we want to apply sky color to where rays
-  // bounced away at some point in the loop
-  __m256 no_hit_mask = _mm256_xor_ps(hit_mask, global::all_set);
   update_colors(&colors, &sky, no_hit_mask);
 
   return colors;
@@ -146,7 +144,6 @@ inline static void render(CharColor* data) {
   static_assert((IMG_HEIGHT * IMG_WIDTH) % 8 == 0,
                 "image size shall be divisible by 8 until I handle that case lol");
   constexpr RayCluster base_dirs = generate_init_directions();
-  BREAKPOINT
 
   Color_256 sample_color;
   Color final_color;
@@ -161,11 +158,14 @@ inline static void render(CharColor* data) {
       sample_color.g = _mm256_setzero_ps();
       sample_color.b = _mm256_setzero_ps();
       // 64 samples per pixel. 8 rays calculated 8 times
+      //      if (row > IMG_HEIGHT / 2 && col > IMG_WIDTH / 2) {
+      //        BREAKPOINT
+      //      }
       for (sample_group = 0; sample_group < 8; sample_group++) {
 
         RayCluster samples = base_dirs;
         float x_scale = PIX_DU * col;
-        float y_scale = PIX_DV * row;
+        float y_scale = (PIX_DV * row) + (sample_group * SAMPLE_DV);
 
         __m256 x_scale_vec = _mm256_broadcast_ss(&x_scale);
         __m256 y_scale_vec = _mm256_broadcast_ss(&y_scale);

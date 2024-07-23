@@ -4,7 +4,9 @@
 
 #ifndef NDEBUG
 #define BREAKPOINT asm("int $3");
-#endif // DEBUG
+#else
+#define BREAKPOINT ;
+#endif
 
 inline void print_vec_256(const __m256 vec) {
 

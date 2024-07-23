@@ -42,17 +42,16 @@
   discrim = _mm256_fmsub_ps(b, b, discrim);
 
   __m256 zeros = _mm256_setzero_ps();
-  __m256 res = _mm256_cmp_ps(discrim, zeros, CMPLT);
-  int no_hit = _mm256_testz_ps(res, res);
+  __m256 hit_loc = _mm256_cmp_ps(discrim, zeros, CMPNLT);
+  int no_hit = _mm256_testz_ps(hit_loc, hit_loc);
 
   if (no_hit) {
     return zeros;
   }
 
-  __m256 hits = _mm256_xor_ps(res, global::all_set);
-  // mask out the discriminants and b where < 0. ie, no hits
-  discrim = _mm256_and_ps(discrim, hits);
-  b = _mm256_and_ps(b, hits);
+  // mask out the discriminants and b where there aren't hits
+  discrim = _mm256_and_ps(discrim, hit_loc);
+  b = _mm256_and_ps(b, hit_loc);
 
   __m256 recip_sqrt_d = _mm256_rsqrt_ps(discrim);
   __m256 sqrt_d = _mm256_mul_ps(recip_sqrt_d, discrim);
@@ -63,8 +62,8 @@
 
   // allow through roots within the max t value
   __m256 t_max_vec = _mm256_broadcast_ss(&t_max);
-  res = _mm256_cmp_ps(root, t_max_vec, CMPLT);
-  root = _mm256_and_ps(root, res);
+  hit_loc = _mm256_cmp_ps(root, t_max_vec, CMPLT);
+  root = _mm256_and_ps(root, hit_loc);
 
   return root;
 }
@@ -93,8 +92,8 @@
   hit_rec.orig.z = _mm256_add_ps(ray_orig_z, dir_zt);
 
   hit_rec.norm.x = _mm256_sub_ps(hit_rec.orig.x, sphere_cluster->center.x);
-  hit_rec.norm.y = _mm256_sub_ps(hit_rec.orig.y, sphere_cluster->center.x);
-  hit_rec.norm.z = _mm256_sub_ps(hit_rec.orig.z, sphere_cluster->center.x);
+  hit_rec.norm.y = _mm256_sub_ps(hit_rec.orig.y, sphere_cluster->center.y);
+  hit_rec.norm.z = _mm256_sub_ps(hit_rec.orig.z, sphere_cluster->center.z);
 
   __m256 recip_radius = _mm256_rcp_ps(sphere_cluster->r);
 
