@@ -16,22 +16,24 @@
 using namespace std::chrono;
 
 int main() {
-  static_assert((IMG_HEIGHT * IMG_WIDTH) % 8 == 0,
-                "image size shall be divisible by 8 until I handle that case lol");
-
   CharColor* img_data = (CharColor*)malloc(IMG_WIDTH * IMG_HEIGHT * sizeof(CharColor));
 
   auto start_time = system_clock::now();
 
-  std::array<std::thread, 100> threads;
-  for (size_t idx = 0; idx < threads.size(); idx++) {
+  if constexpr (MULTITHREADING_ENABLED) {
 
-    uint32_t chunk_size = IMG_WIDTH * (IMG_HEIGHT / threads.size());
-    threads[idx] = std::thread(render, img_data, chunk_size, idx * chunk_size);
-  }
+    std::array<std::thread, THREAD_COUNT> threads;
+    for (size_t idx = 0; idx < threads.size(); idx++) {
 
-  for (size_t idx = 0; idx < threads.size(); idx++) {
-    threads[idx].join();
+      constexpr uint32_t chunk_size = IMG_WIDTH * (IMG_HEIGHT / threads.size());
+      threads[idx] = std::thread(render, img_data, chunk_size, idx * chunk_size);
+    }
+
+    for (size_t idx = 0; idx < threads.size(); idx++) {
+      threads[idx].join();
+    }
+  } else {
+    render(img_data, IMG_WIDTH * IMG_HEIGHT, 0);
   }
 
   auto end_time = system_clock::now();
