@@ -1,4 +1,5 @@
 #include "../src/math.h"
+#include "../src/render.h"
 #include "../src/sphere.h"
 #include "../src/utils.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -15,16 +16,6 @@ const RayCluster rays{.dir = {
                           .y = _mm256_set_ps(.4f, .4f, .4f, .4f, -.4f, -.4f, -.4f, -.4f),
                           .z = _mm256_set_ps(-1.f, -1.f, -1.f, -1.f, -1.f, -1.f, -1.f, -1.f),
                       }};
-
-constexpr Color silver = {
-    .r = 0.66f,
-    .g = 0.66f,
-    .b = 0.66f,
-};
-
-constexpr Material materials[SPHERE_NUM] = {{
-    .atten = silver,
-}};
 
 const Sphere sphere{
     .center = {.x = 0.f, .y = 0.f, .z = -1.f},
@@ -144,8 +135,16 @@ void test_image_write() {
     }
   }
 
-  stbi_write_png("test.png", IMG_WIDTH, IMG_HEIGHT, 3, data, IMG_WIDTH * 3);
-  printf("TESTING IMAGE_WRITE\n");
+  // stbi_write_png("test.png", IMG_WIDTH, IMG_HEIGHT, 3, data, IMG_WIDTH * 3);
+  printf("\n");
+}
+
+void test_render() {
+  printf("TESTING RENDER\n");
+  CharColor* img_data = (CharColor*)malloc(IMG_WIDTH * IMG_HEIGHT * sizeof(CharColor));
+  render(img_data, (IMG_WIDTH * IMG_HEIGHT) / 2, IMG_WIDTH * 540);
+  stbi_write_png("out.png", IMG_WIDTH, IMG_HEIGHT, 3, img_data, IMG_WIDTH * sizeof(CharColor));
+  printf("\n");
 }
 
 int main() {
@@ -155,5 +154,6 @@ int main() {
   test_dot();
   test_normalize();
   test_image_write();
+  test_render();
   return 0;
 }
