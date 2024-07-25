@@ -11,6 +11,8 @@
 #include <cstdio>
 #include <cstring>
 #include <immintrin.h>
+#include <iostream>
+#include <ostream>
 
 constexpr Color_256 silver_attenuation = {
     .r = {0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f},
@@ -96,8 +98,6 @@ inline static void update_colors(Color_256* curr_colors, const Color_256* new_co
       .g = global::white,
       .b = global::white,
   };
-  if (rays->dir.x[0] > 0.f && rays->dir.y[0] < 0.5f)
-    BREAKPOINT
 
   for (int i = 0; i < depth; i++) {
 
@@ -156,20 +156,25 @@ consteval RayCluster generate_init_directions() {
   return init_dirs;
 }
 
-inline static void render(CharColor* data) {
-  static_assert((IMG_HEIGHT * IMG_WIDTH) % 8 == 0,
-                "image size shall be divisible by 8 until I handle that case lol");
+inline static void render(CharColor* data, uint32_t pixel_count, uint32_t offset) {
   constexpr RayCluster base_dirs = generate_init_directions();
 
   Color_256 sample_color;
   Color final_color;
   CharColor char_color;
   uint32_t write_pos;
-  uint16_t row, col, sample_group;
+  uint16_t sample_group;
+  uint32_t row = offset / IMG_WIDTH;
+  uint32_t col = offset % IMG_WIDTH;
+  uint32_t end_row = (offset + pixel_count - 1) / IMG_WIDTH;
+  uint32_t end_col = (offset + pixel_count - 1) % IMG_WIDTH;
+  // std::cout << "row: " << row << std::endl;
+  // std::cout << "col: " << col << std::endl;
+  // std::cout << "end row: " << end_row << std::endl;
+  // std::cout << "end col: " << end_col << std::endl;
 
-  for (row = 0; row < IMG_HEIGHT; row++) {
-    for (col = 0; col < IMG_WIDTH; col++) {
-
+  for (; row <= end_row; row++) {
+    while (col <= end_col) {
       sample_color.r = _mm256_setzero_ps();
       sample_color.g = _mm256_setzero_ps();
       sample_color.b = _mm256_setzero_ps();
@@ -218,6 +223,8 @@ inline static void render(CharColor* data) {
 
       write_pos = col + row * IMG_WIDTH;
       data[write_pos] = char_color;
+      col++;
     }
+    col = 0;
   }
 }
