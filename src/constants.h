@@ -2,7 +2,7 @@
 #include <cfloat>
 #include <cstdint>
 
-constexpr uint8_t SPHERE_NUM = 2;
+constexpr uint8_t SPHERE_NUM = 3;
 constexpr uint8_t CMPEQ = 0;
 constexpr uint8_t CMPLT = 1;
 constexpr uint8_t CMPNEQ = 4;

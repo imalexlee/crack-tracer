@@ -24,14 +24,28 @@ constexpr Color silver = {
     .b = 0.66f,
 };
 
+constexpr Color red = {
+    .r = 0.90f,
+    .g = 0.20f,
+    .b = 0.20f,
+};
+constexpr Color gold = {
+    .r = 0.85f,
+    .g = 0.70f,
+    .b = 0.24f,
+};
+
 constexpr Material materials[SPHERE_NUM] = {
     {.atten = silver},
-    //{.atten = silver},
+    {.atten = red},
+    {.atten = gold},
 };
 
 constexpr Sphere spheres[SPHERE_NUM] = {
-    {.center = {.x = 0.f, .y = -100.5f, .z = -1.f}, .mat = materials[0], .r = 100.f},
-    {.center = {.x = 0.f, .y = 0.f, .z = -1.f}, .mat = materials[0], .r = 0.5f},
+    {.center = {.x = 0.f, .y = 0.f, .z = -1.2f}, .mat = materials[0], .r = 0.5f},
+    {.center = {.x = -1.f, .y = 0.f, .z = -1.f}, .mat = materials[1], .r = 0.4f},
+    {.center = {.x = 1.f, .y = 0.f, .z = -1.f}, .mat = materials[2], .r = 0.4f},
+    //{.center = {.x = 0.f, .y = -100.5f, .z = -1.f}, .mat = materials[2], .r = 100.f},
 };
 
 constexpr Color_256 sky = {
@@ -82,6 +96,8 @@ inline static void update_colors(Color_256* curr_colors, const Color_256* new_co
       .g = global::white,
       .b = global::white,
   };
+  if (rays->dir.x[0] > 0.f && rays->dir.y[0] < 0.5f)
+    BREAKPOINT
 
   for (int i = 0; i < depth; i++) {
 
@@ -158,9 +174,9 @@ inline static void render(CharColor* data) {
       sample_color.g = _mm256_setzero_ps();
       sample_color.b = _mm256_setzero_ps();
       // 64 samples per pixel. 8 rays calculated 8 times
-      //      if (row > IMG_HEIGHT / 2 && col > IMG_WIDTH / 2) {
-      //        BREAKPOINT
-      //      }
+      // if (row > IMG_HEIGHT / 2 && col > IMG_WIDTH / 2) {
+      //  BREAKPOINT
+      //}
       for (sample_group = 0; sample_group < 8; sample_group++) {
 
         RayCluster samples = base_dirs;

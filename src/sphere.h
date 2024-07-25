@@ -62,7 +62,9 @@
 
   // allow through roots within the max t value
   __m256 t_max_vec = _mm256_broadcast_ss(&t_max);
-  hit_loc = _mm256_cmp_ps(root, t_max_vec, CMPLT);
+  __m256 below_max = _mm256_cmp_ps(root, t_max_vec, CMPLT);
+  __m256 above_min = _mm256_cmp_ps(root, zeros, CMPNLT);
+  hit_loc = _mm256_and_ps(above_min, below_max);
   root = _mm256_and_ps(root, hit_loc);
 
   return root;
@@ -181,8 +183,12 @@ static inline void update_sphere_cluster(SphereCluster* curr_cluster, Sphere cur
     // 0's during the minimum comparisons. Again, 0's represent no hits
     __m256 no_hit_loc = _mm256_xor_ps(hit_loc, global::all_set);
     __m256 max_mask = _mm256_and_ps(no_hit_loc, max);
-    __m256 lowest_t_masked = _mm256_or_ps(lowest_t_vals, max_mask);
     new_t_vals = _mm256_or_ps(new_t_vals, max_mask);
+
+    // replace 0's with max for current lowest too
+    __m256 curr_no_hit_loc = _mm256_cmp_ps(lowest_t_vals, zeros, CMPEQ);
+    max_mask = _mm256_and_ps(curr_no_hit_loc, max);
+    __m256 lowest_t_masked = _mm256_or_ps(lowest_t_vals, max_mask);
 
     // update sphere references based on where new
     // t values are closer than the current lowest
