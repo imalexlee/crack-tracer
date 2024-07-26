@@ -11,7 +11,7 @@ endif()
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-add_executable(${PROJECT_NAME} src/entry.cpp src/entry.cpp)
+add_executable(${PROJECT_NAME} src/entry.cpp src/render.cpp src/sphere.cpp)
 
 target_compile_options(
   ${PROJECT_NAME}
@@ -22,7 +22,7 @@ target_compile_options(
 target_compile_options(
   ${PROJECT_NAME}
   PUBLIC
-    "$<$<CONFIG:RELEASE>:-Ofast;-fno-signed-zeros;-flto;-Wall;-Wextra>;-Wno-missing-field-initializers;-march=native"
+    "$<$<CONFIG:RELEASE>:-Ofast;-g;-fno-signed-zeros;-flto;-Wall;-Wextra>;-Wno-missing-field-initializers;-march=native"
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE glfw)
