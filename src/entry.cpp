@@ -41,5 +41,5 @@ int main() {
   float milli = duration_cast<microseconds>(dur).count() / 1000.f;
   printf("render time (ms): %f\n", milli);
 
-  stbi_write_png("out.png", IMG_WIDTH, IMG_HEIGHT, 3, img_data, IMG_WIDTH * sizeof(CharColor));
+  // stbi_write_png("out.png", IMG_WIDTH, IMG_HEIGHT, 3, img_data, IMG_WIDTH * sizeof(CharColor));
 }

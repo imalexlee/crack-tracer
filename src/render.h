@@ -4,15 +4,12 @@
 #include "math.h"
 #include "sphere.h"
 #include "types.h"
-#include "utils.h"
 #include <cmath>
 #include <csignal>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <immintrin.h>
-#include <iostream>
-#include <ostream>
 
 constexpr Color_256 silver_attenuation = {
     .r = {0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f},
@@ -85,8 +82,7 @@ inline static void update_colors(Color_256* curr_colors, const Color_256* new_co
   curr_colors->b = _mm256_mul_ps(curr_colors->b, b);
 }
 
-[[nodiscard]] inline static Color_256 ray_cluster_colors(RayCluster* rays, const Sphere* spheres,
-                                                         uint8_t depth) {
+inline static Color_256 ray_cluster_colors(RayCluster* rays, const Sphere* spheres, uint8_t depth) {
   const __m256 zeros = _mm256_setzero_ps();
   // will be used to add a sky tint to rays that at some point bounce off into space.
   // if a ray never bounces away (within amount of bounces set by depth), the
@@ -101,7 +97,7 @@ inline static void update_colors(Color_256* curr_colors, const Color_256* new_co
 
   for (int i = 0; i < depth; i++) {
 
-    hit_rec = find_sphere_hits(spheres, rays, INFINITY);
+    find_sphere_hits(&hit_rec, spheres, rays, INFINITY);
 
     __m256 new_hit_mask = _mm256_cmp_ps(hit_rec.t, zeros, CMPNLE);
     // or a mask when a value is not a hit, at any point. if all are zero,
@@ -168,10 +164,6 @@ inline static void render(CharColor* data, uint32_t pixel_count, uint32_t offset
   uint32_t col = offset % IMG_WIDTH;
   uint32_t end_row = (offset + pixel_count - 1) / IMG_WIDTH;
   uint32_t end_col = (offset + pixel_count - 1) % IMG_WIDTH;
-  // std::cout << "row: " << row << std::endl;
-  // std::cout << "col: " << col << std::endl;
-  // std::cout << "end row: " << end_row << std::endl;
-  // std::cout << "end col: " << end_col << std::endl;
 
   for (; row <= end_row; row++) {
     while (col <= end_col) {
