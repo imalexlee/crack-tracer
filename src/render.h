@@ -152,6 +152,77 @@ consteval RayCluster generate_init_directions() {
   return init_dirs;
 }
 
+inline static void write_out_color_buf(const Color* color_buf, CharColor* img_buf,
+                                       uint32_t write_pos) {
+  // when temp buffer is full, flush to the image
+  __m256 cm = _mm256_broadcast_ss(&COLOR_MULTIPLIER);
+  __m256 colors_1_f32 = _mm256_mul_ps(_mm256_load_ps((float*)color_buf), cm);
+  __m256 colors_2_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 8), cm);
+  __m256 colors_3_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 16), cm);
+  __m256 colors_4_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 24), cm);
+  __m256 colors_5_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 32), cm);
+  __m256 colors_6_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 40), cm);
+  __m256 colors_7_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 48), cm);
+  __m256 colors_8_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 56), cm);
+  __m256 colors_9_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 64), cm);
+  __m256 colors_10_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 72), cm);
+  __m256 colors_11_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 80), cm);
+  __m256 colors_12_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 88), cm);
+
+  __m256i colors_1_i32 = _mm256_cvtps_epi32(colors_1_f32);
+  __m256i colors_2_i32 = _mm256_cvtps_epi32(colors_2_f32);
+  __m256i colors_3_i32 = _mm256_cvtps_epi32(colors_3_f32);
+  __m256i colors_4_i32 = _mm256_cvtps_epi32(colors_4_f32);
+  __m256i colors_5_i32 = _mm256_cvtps_epi32(colors_5_f32);
+  __m256i colors_6_i32 = _mm256_cvtps_epi32(colors_6_f32);
+  __m256i colors_7_i32 = _mm256_cvtps_epi32(colors_7_f32);
+  __m256i colors_8_i32 = _mm256_cvtps_epi32(colors_8_f32);
+  __m256i colors_9_i32 = _mm256_cvtps_epi32(colors_9_f32);
+  __m256i colors_10_i32 = _mm256_cvtps_epi32(colors_10_f32);
+  __m256i colors_11_i32 = _mm256_cvtps_epi32(colors_11_f32);
+  __m256i colors_12_i32 = _mm256_cvtps_epi32(colors_12_f32);
+
+  const uint8_t BOTH_LOW_XMMWORD = 32;
+  const uint8_t BOTH_HIGH_XMMWORD = 49;
+  __m256i temp_permute_1 = _mm256_permute2x128_si256(colors_1_i32, colors_2_i32, BOTH_LOW_XMMWORD);
+  __m256i temp_permute_2 = _mm256_permute2x128_si256(colors_1_i32, colors_2_i32, BOTH_HIGH_XMMWORD);
+  __m256i temp_permute_3 = _mm256_permute2x128_si256(colors_3_i32, colors_4_i32, BOTH_LOW_XMMWORD);
+  __m256i temp_permute_4 = _mm256_permute2x128_si256(colors_3_i32, colors_4_i32, BOTH_HIGH_XMMWORD);
+  __m256i temp_permute_5 = _mm256_permute2x128_si256(colors_5_i32, colors_6_i32, BOTH_LOW_XMMWORD);
+  __m256i temp_permute_6 = _mm256_permute2x128_si256(colors_5_i32, colors_6_i32, BOTH_HIGH_XMMWORD);
+  __m256i temp_permute_7 = _mm256_permute2x128_si256(colors_7_i32, colors_8_i32, BOTH_LOW_XMMWORD);
+  __m256i temp_permute_8 = _mm256_permute2x128_si256(colors_7_i32, colors_8_i32, BOTH_HIGH_XMMWORD);
+  __m256i temp_permute_9 = _mm256_permute2x128_si256(colors_9_i32, colors_10_i32, BOTH_LOW_XMMWORD);
+  __m256i temp_permute_10 =
+      _mm256_permute2x128_si256(colors_9_i32, colors_10_i32, BOTH_HIGH_XMMWORD);
+  __m256i temp_permute_11 =
+      _mm256_permute2x128_si256(colors_11_i32, colors_12_i32, BOTH_LOW_XMMWORD);
+  __m256i temp_permute_12 =
+      _mm256_permute2x128_si256(colors_11_i32, colors_12_i32, BOTH_HIGH_XMMWORD);
+
+  __m256i colors_1_i16 = _mm256_packs_epi32(temp_permute_1, temp_permute_2);
+  __m256i colors_2_i16 = _mm256_packs_epi32(temp_permute_3, temp_permute_4);
+  __m256i colors_3_i16 = _mm256_packs_epi32(temp_permute_5, temp_permute_6);
+  __m256i colors_4_i16 = _mm256_packs_epi32(temp_permute_7, temp_permute_8);
+  __m256i colors_5_i16 = _mm256_packs_epi32(temp_permute_9, temp_permute_10);
+  __m256i colors_6_i16 = _mm256_packs_epi32(temp_permute_11, temp_permute_12);
+
+  temp_permute_1 = _mm256_permute2x128_si256(colors_1_i16, colors_2_i16, BOTH_LOW_XMMWORD);
+  temp_permute_2 = _mm256_permute2x128_si256(colors_1_i16, colors_2_i16, BOTH_HIGH_XMMWORD);
+  temp_permute_3 = _mm256_permute2x128_si256(colors_3_i16, colors_4_i16, BOTH_LOW_XMMWORD);
+  temp_permute_4 = _mm256_permute2x128_si256(colors_3_i16, colors_4_i16, BOTH_HIGH_XMMWORD);
+  temp_permute_5 = _mm256_permute2x128_si256(colors_5_i16, colors_6_i16, BOTH_LOW_XMMWORD);
+  temp_permute_6 = _mm256_permute2x128_si256(colors_5_i16, colors_6_i16, BOTH_HIGH_XMMWORD);
+
+  __m256i colors_1_u8 = _mm256_packus_epi16(temp_permute_1, temp_permute_2);
+  __m256i colors_2_u8 = _mm256_packus_epi16(temp_permute_3, temp_permute_4);
+  __m256i colors_3_u8 = _mm256_packus_epi16(temp_permute_5, temp_permute_6);
+
+  _mm256_stream_si256(((__m256i*)img_buf) + write_pos, colors_1_u8);
+  _mm256_stream_si256(((__m256i*)img_buf) + write_pos + 1, colors_2_u8);
+  _mm256_stream_si256(((__m256i*)img_buf) + write_pos + 2, colors_3_u8);
+}
+
 inline static void render(CharColor* img_buf, uint32_t pixel_count, uint32_t pix_offset) {
   constexpr RayCluster base_dirs = generate_init_directions();
 
@@ -216,85 +287,8 @@ inline static void render(CharColor* img_buf, uint32_t pixel_count, uint32_t pix
         continue;
       }
 
-      // when temp buffer is full, flush to the image
-      __m256 cm = _mm256_broadcast_ss(&COLOR_MULTIPLIER);
-      __m256 colors_1_f32 = _mm256_mul_ps(_mm256_load_ps((float*)color_buf), cm);
-      __m256 colors_2_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 8), cm);
-      __m256 colors_3_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 16), cm);
-      __m256 colors_4_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 24), cm);
-      __m256 colors_5_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 32), cm);
-      __m256 colors_6_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 40), cm);
-      __m256 colors_7_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 48), cm);
-      __m256 colors_8_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 56), cm);
-      __m256 colors_9_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 64), cm);
-      __m256 colors_10_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 72), cm);
-      __m256 colors_11_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 80), cm);
-      __m256 colors_12_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 88), cm);
-
-      __m256i colors_1_i32 = _mm256_cvtps_epi32(colors_1_f32);
-      __m256i colors_2_i32 = _mm256_cvtps_epi32(colors_2_f32);
-      __m256i colors_3_i32 = _mm256_cvtps_epi32(colors_3_f32);
-      __m256i colors_4_i32 = _mm256_cvtps_epi32(colors_4_f32);
-      __m256i colors_5_i32 = _mm256_cvtps_epi32(colors_5_f32);
-      __m256i colors_6_i32 = _mm256_cvtps_epi32(colors_6_f32);
-      __m256i colors_7_i32 = _mm256_cvtps_epi32(colors_7_f32);
-      __m256i colors_8_i32 = _mm256_cvtps_epi32(colors_8_f32);
-      __m256i colors_9_i32 = _mm256_cvtps_epi32(colors_9_f32);
-      __m256i colors_10_i32 = _mm256_cvtps_epi32(colors_10_f32);
-      __m256i colors_11_i32 = _mm256_cvtps_epi32(colors_11_f32);
-      __m256i colors_12_i32 = _mm256_cvtps_epi32(colors_12_f32);
-
-      const uint8_t BOTH_LOW_XMMWORD = 32;
-      const uint8_t BOTH_HIGH_XMMWORD = 49;
-      __m256i temp_permute_1 =
-          _mm256_permute2x128_si256(colors_1_i32, colors_2_i32, BOTH_LOW_XMMWORD);
-      __m256i temp_permute_2 =
-          _mm256_permute2x128_si256(colors_1_i32, colors_2_i32, BOTH_HIGH_XMMWORD);
-      __m256i temp_permute_3 =
-          _mm256_permute2x128_si256(colors_3_i32, colors_4_i32, BOTH_LOW_XMMWORD);
-      __m256i temp_permute_4 =
-          _mm256_permute2x128_si256(colors_3_i32, colors_4_i32, BOTH_HIGH_XMMWORD);
-      __m256i temp_permute_5 =
-          _mm256_permute2x128_si256(colors_5_i32, colors_6_i32, BOTH_LOW_XMMWORD);
-      __m256i temp_permute_6 =
-          _mm256_permute2x128_si256(colors_5_i32, colors_6_i32, BOTH_HIGH_XMMWORD);
-      __m256i temp_permute_7 =
-          _mm256_permute2x128_si256(colors_7_i32, colors_8_i32, BOTH_LOW_XMMWORD);
-      __m256i temp_permute_8 =
-          _mm256_permute2x128_si256(colors_7_i32, colors_8_i32, BOTH_HIGH_XMMWORD);
-      __m256i temp_permute_9 =
-          _mm256_permute2x128_si256(colors_9_i32, colors_10_i32, BOTH_LOW_XMMWORD);
-      __m256i temp_permute_10 =
-          _mm256_permute2x128_si256(colors_9_i32, colors_10_i32, BOTH_HIGH_XMMWORD);
-      __m256i temp_permute_11 =
-          _mm256_permute2x128_si256(colors_11_i32, colors_12_i32, BOTH_LOW_XMMWORD);
-      __m256i temp_permute_12 =
-          _mm256_permute2x128_si256(colors_11_i32, colors_12_i32, BOTH_HIGH_XMMWORD);
-
-      __m256i colors_1_i16 = _mm256_packs_epi32(temp_permute_1, temp_permute_2);
-      __m256i colors_2_i16 = _mm256_packs_epi32(temp_permute_3, temp_permute_4);
-      __m256i colors_3_i16 = _mm256_packs_epi32(temp_permute_5, temp_permute_6);
-      __m256i colors_4_i16 = _mm256_packs_epi32(temp_permute_7, temp_permute_8);
-      __m256i colors_5_i16 = _mm256_packs_epi32(temp_permute_9, temp_permute_10);
-      __m256i colors_6_i16 = _mm256_packs_epi32(temp_permute_11, temp_permute_12);
-
-      temp_permute_1 = _mm256_permute2x128_si256(colors_1_i16, colors_2_i16, BOTH_LOW_XMMWORD);
-      temp_permute_2 = _mm256_permute2x128_si256(colors_1_i16, colors_2_i16, BOTH_HIGH_XMMWORD);
-      temp_permute_3 = _mm256_permute2x128_si256(colors_3_i16, colors_4_i16, BOTH_LOW_XMMWORD);
-      temp_permute_4 = _mm256_permute2x128_si256(colors_3_i16, colors_4_i16, BOTH_HIGH_XMMWORD);
-      temp_permute_5 = _mm256_permute2x128_si256(colors_5_i16, colors_6_i16, BOTH_LOW_XMMWORD);
-      temp_permute_6 = _mm256_permute2x128_si256(colors_5_i16, colors_6_i16, BOTH_HIGH_XMMWORD);
-
-      __m256i colors_1_u8 = _mm256_packus_epi16(temp_permute_1, temp_permute_2);
-      __m256i colors_2_u8 = _mm256_packus_epi16(temp_permute_3, temp_permute_4);
-      __m256i colors_3_u8 = _mm256_packus_epi16(temp_permute_5, temp_permute_6);
-
-      _mm256_stream_si256(((__m256i*)img_buf) + write_pos, colors_1_u8);
-      write_pos++;
-      _mm256_stream_si256(((__m256i*)img_buf) + write_pos, colors_2_u8);
-      write_pos++;
-      _mm256_stream_si256(((__m256i*)img_buf) + write_pos, colors_3_u8);
-      write_pos++;
+      write_out_color_buf(color_buf, img_buf, write_pos);
+      write_pos += 3;
 
       color_buf_idx = 0;
     }
