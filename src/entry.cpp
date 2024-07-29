@@ -14,6 +14,7 @@
 #include <stb_image_write.h>
 
 using namespace std::chrono;
+const int sample_count = 60;
 
 int main() {
   CharColor* img_data = (CharColor*)aligned_alloc(32, IMG_WIDTH * IMG_HEIGHT * sizeof(CharColor));
@@ -33,13 +34,15 @@ int main() {
       threads[idx].join();
     }
   } else {
-    render(img_data, IMG_WIDTH * IMG_HEIGHT, 0);
+    for (int i = 0; i < sample_count; i++) {
+      render(img_data, IMG_WIDTH * IMG_HEIGHT, 0);
+    }
   }
 
   auto end_time = system_clock::now();
   auto dur = duration<float>(end_time - start_time);
   float milli = duration_cast<microseconds>(dur).count() / 1000.f;
-  printf("render time (ms): %f\n", milli);
+  printf("render time (ms): %f\n", milli / sample_count);
 
-  // stbi_write_png("out.png", IMG_WIDTH, IMG_HEIGHT, 3, img_data, IMG_WIDTH * sizeof(CharColor));
+  stbi_write_png("out.png", IMG_WIDTH, IMG_HEIGHT, 3, img_data, IMG_WIDTH * sizeof(CharColor));
 }
