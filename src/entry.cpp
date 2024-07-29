@@ -16,7 +16,7 @@
 using namespace std::chrono;
 
 int main() {
-  CharColor* img_data = (CharColor*)malloc(IMG_WIDTH * IMG_HEIGHT * sizeof(CharColor));
+  CharColor* img_data = (CharColor*)aligned_alloc(32, IMG_WIDTH * IMG_HEIGHT * sizeof(CharColor));
 
   auto start_time = system_clock::now();
 

@@ -4,12 +4,14 @@
 #include "math.h"
 #include "sphere.h"
 #include "types.h"
+#include "utils.h"
 #include <cmath>
 #include <csignal>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <immintrin.h>
+#include <vector>
 
 constexpr Color_256 silver_attenuation = {
     .r = {0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f},
@@ -152,18 +154,21 @@ consteval RayCluster generate_init_directions() {
   return init_dirs;
 }
 
-inline static void render(CharColor* data, uint32_t pixel_count, uint32_t offset) {
+inline static void render(CharColor* img_buf, uint32_t pixel_count, uint32_t pix_offset) {
   constexpr RayCluster base_dirs = generate_init_directions();
 
   Color_256 sample_color;
+
+  alignas(32) CharColor color_buf[32];
   Color final_color;
   CharColor char_color;
-  uint32_t write_pos;
+  uint8_t color_buf_idx = 0;
+  uint32_t write_pos = (pix_offset / 32) * 3;
   uint16_t sample_group;
-  uint32_t row = offset / IMG_WIDTH;
-  uint32_t col = offset % IMG_WIDTH;
-  uint32_t end_row = (offset + pixel_count - 1) / IMG_WIDTH;
-  uint32_t end_col = (offset + pixel_count - 1) % IMG_WIDTH;
+  uint32_t row = pix_offset / IMG_WIDTH;
+  uint32_t col = pix_offset % IMG_WIDTH;
+  uint32_t end_row = (pix_offset + pixel_count - 1) / IMG_WIDTH;
+  uint32_t end_col = (pix_offset + pixel_count - 1) % IMG_WIDTH;
 
   for (; row <= end_row; row++) {
     while (col <= end_col) {
@@ -174,7 +179,7 @@ inline static void render(CharColor* data, uint32_t pixel_count, uint32_t offset
       // if (row > IMG_HEIGHT / 2 && col > IMG_WIDTH / 2) {
       //  BREAKPOINT
       //}
-      for (sample_group = 0; sample_group < 8; sample_group++) {
+      for (sample_group = 0; sample_group < SAMPLE_GROUP_NUM; sample_group++) {
 
         RayCluster samples = base_dirs;
         float x_scale = PIX_DU * col;
@@ -208,13 +213,29 @@ inline static void render(CharColor* data, uint32_t pixel_count, uint32_t offset
       _mm_store_ss(&final_color.g, _mm256_castps256_ps128(sample_color.g));
       _mm_store_ss(&final_color.b, _mm256_castps256_ps128(sample_color.b));
 
-      // average by sample count. color / 64
       char_color.r = final_color.r * COLOR_MULTIPLIER;
       char_color.g = final_color.g * COLOR_MULTIPLIER;
       char_color.b = final_color.b * COLOR_MULTIPLIER;
 
-      write_pos = col + row * IMG_WIDTH;
-      data[write_pos] = char_color;
+      // fill temp buffer incrementally
+      color_buf[color_buf_idx++] = char_color;
+
+      // when temp buffer is full, flush to the image
+      if (color_buf_idx == 32) {
+        __m256i data_1 = _mm256_load_si256((__m256i*)color_buf);
+        __m256i data_2 = _mm256_load_si256(((__m256i*)color_buf) + 1);
+        __m256i data_3 = _mm256_load_si256(((__m256i*)color_buf) + 2);
+
+        _mm256_stream_si256(((__m256i*)img_buf) + write_pos, data_1);
+        write_pos++;
+        _mm256_stream_si256(((__m256i*)img_buf) + write_pos, data_2);
+        write_pos++;
+        _mm256_stream_si256(((__m256i*)img_buf) + write_pos, data_3);
+        write_pos++;
+
+        color_buf_idx = 0;
+      }
+
       col++;
     }
     col = 0;

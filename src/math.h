@@ -36,3 +36,8 @@ inline static void normalize(Vec3_256* vec) {
   vec->y = _mm256_mul_ps(vec->y, recip_len);
   vec->z = _mm256_mul_ps(vec->z, recip_len);
 }
+
+inline static uint32_t f_to_i(float f_val) {
+  f_val += 1 << 23;
+  return ((uint32_t)f_val) & 0x007FFFFF;
+}
