@@ -141,8 +141,8 @@ void test_image_write() {
 
 void test_render() {
   printf("TESTING RENDER\n");
-  CharColor* img_data = (CharColor*)malloc(IMG_WIDTH * IMG_HEIGHT * sizeof(CharColor));
-  render(img_data, (IMG_WIDTH * IMG_HEIGHT) / 2, IMG_WIDTH * 540);
+  CharColor* img_data = (CharColor*)aligned_alloc(32, IMG_WIDTH * IMG_HEIGHT * sizeof(CharColor));
+  render(img_data, (IMG_WIDTH * IMG_HEIGHT) / 2, IMG_WIDTH * (IMG_HEIGHT / 2));
   stbi_write_png("out.png", IMG_WIDTH, IMG_HEIGHT, 3, img_data, IMG_WIDTH * sizeof(CharColor));
   printf("\n");
 }
