@@ -3,6 +3,7 @@
 #include "globals.h"
 #include "types.h"
 #include <immintrin.h>
+#include <span>
 
 // Returns hit t values or 0 depending on if this ray hit this sphere or not
 [[nodiscard]] inline static __m256 sphere_hit(const RayCluster* rays, const Sphere* sphere,
@@ -150,7 +151,7 @@ inline static void update_sphere_cluster(SphereCluster* curr_cluster, Sphere cur
   curr_cluster->mat.atten.b = _mm256_add_ps(new_sphere_atten_b, curr_sphere_atten_b);
 };
 
-inline static void find_sphere_hits(HitRecords* hit_rec, const Sphere* spheres,
+inline static void find_sphere_hits(HitRecords* hit_rec, const std::span<const Sphere> spheres,
                                     const RayCluster* rays, const Vec4* cam_origin, float t_max) {
 
   __m256 zeros = _mm256_setzero_ps();
@@ -174,7 +175,7 @@ inline static void find_sphere_hits(HitRecords* hit_rec, const Sphere* spheres,
   update_sphere_cluster(&closest_spheres, spheres[0], hit_loc);
   //}
 
-  for (int i = 1; i < SPHERE_NUM; i++) {
+  for (size_t i = 1; i < spheres.size(); i++) {
     __m256 new_t_vals = sphere_hit(rays, &spheres[i], cam_origin, t_max);
 
     // don't update on instances of no hits (hit locations all zeros)

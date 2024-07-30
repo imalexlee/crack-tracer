@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <cstring>
 #include <immintrin.h>
+#include <span>
 
 constexpr Color_256 silver_attenuation = {
     .r = {0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f},
@@ -34,13 +35,13 @@ constexpr Color gold = {
     .b = 0.24f,
 };
 
-constexpr Material materials[SPHERE_NUM] = {
+constexpr Material materials[] = {
     {.atten = silver},
     {.atten = red},
     {.atten = gold},
 };
 
-constexpr Sphere spheres[SPHERE_NUM] = {
+constexpr Sphere spheres[] = {
     {.center = {.x = 0.f, .y = 0.f, .z = -1.2f}, .mat = materials[0], .r = 0.5f},
     {.center = {.x = -1.f, .y = 0.f, .z = -1.f}, .mat = materials[1], .r = 0.4f},
     {.center = {.x = 1.f, .y = 0.f, .z = -1.f}, .mat = materials[2], .r = 0.4f},
@@ -82,7 +83,7 @@ inline static void update_colors(Color_256* curr_colors, const Color_256* new_co
   curr_colors->b = _mm256_mul_ps(curr_colors->b, b);
 }
 
-inline static Color_256 ray_cluster_colors(RayCluster* rays, const Sphere* spheres,
+inline static Color_256 ray_cluster_colors(RayCluster* rays, const std::span<const Sphere> spheres,
                                            const Vec4* cam_origin, uint8_t depth) {
   const __m256 zeros = _mm256_setzero_ps();
   // will be used to add a sky tint to rays that at some point bounce off into space.
@@ -221,12 +222,28 @@ inline static void write_out_color_buf(const Color* color_buf, CharColor* img_bu
   __m256i colors_2_u8 = _mm256_packus_epi16(temp_permute_3, temp_permute_4);
   __m256i colors_3_u8 = _mm256_packus_epi16(temp_permute_5, temp_permute_6);
 
-  alignas(32) CharColor char_buf[96];
-  _mm256_store_si256(((__m256i*)char_buf), colors_1_u8);
-  _mm256_store_si256(((__m256i*)char_buf) + 1, colors_2_u8);
-  _mm256_store_si256(((__m256i*)char_buf) + 2, colors_3_u8);
+  // SDL offsets our img pointer to a location that might not be aligned to 32 bytes.
+  // Therefore we can't just stream from the registers to memory... :(
+  if constexpr (ACTIVE_RENDER_MODE == RENDER_MODE::REAL_TIME) {
+    alignas(32) CharColor char_buf[32];
+    _mm256_store_si256(((__m256i*)char_buf), colors_1_u8);
+    _mm256_store_si256(((__m256i*)char_buf) + 1, colors_2_u8);
+    _mm256_store_si256(((__m256i*)char_buf) + 2, colors_3_u8);
 
-  memcpy(((__m256i*)img_buf) + write_pos, char_buf, 96 * sizeof(CharColor));
+    int* img_ints = (int*)(((__m256i*)img_buf) + write_pos);
+    int* color_ints = (int*)(char_buf);
+
+    for (int i = 0; i < 24; i += 4) {
+      _mm_stream_si32((img_ints + i), *(color_ints + i));
+      _mm_stream_si32((img_ints + i + 1), *(color_ints + i + 1));
+      _mm_stream_si32((img_ints + i + 2), *(color_ints + i + 2));
+      _mm_stream_si32((img_ints + i + 3), *(color_ints + i + 3));
+    }
+  } else {
+    _mm256_stream_si256(((__m256i*)img_buf) + write_pos, colors_1_u8);
+    _mm256_stream_si256(((__m256i*)img_buf) + write_pos + 1, colors_2_u8);
+    _mm256_stream_si256(((__m256i*)img_buf) + write_pos + 2, colors_3_u8);
+  }
 }
 
 inline static void render(CharColor* img_buf, const Vec4 cam_origin, uint32_t pixel_count,
