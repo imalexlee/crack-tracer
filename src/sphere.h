@@ -3,12 +3,14 @@
 #include "globals.h"
 #include "sphere.h"
 #include "types.h"
+#include <immintrin.h>
 
 // Returns hit t values or 0 depending on if this ray hit this sphere or not
-[[nodiscard]] inline static __m256 sphere_hit(const RayCluster* rays, float t_max, Sphere sphere) {
+[[nodiscard]] inline static __m256 sphere_hit(const RayCluster* rays, float t_max,
+                                              const Sphere* sphere) {
 
   // will also copy radius in but thats ok
-  __m128 sphere_center = _mm_load_ps(&sphere.center.x);
+  __m128 sphere_center = _mm_load_ps(&sphere->center.x);
   __m128 ray_orig = _mm_load_ps(CAM_ORIGIN);
   __m128 oc = _mm_sub_ps(sphere_center, ray_orig);
 
@@ -19,6 +21,9 @@
 
   __m128 oc_temp_z = _mm_shuffle_ps(oc, oc, SHUF_ALL_THIRD);
   __m256 oc_z = _mm256_broadcastss_ps(oc_temp_z);
+
+  float rad_2 = sphere->r * sphere->r;
+  __m256 rad_2_vec = _mm256_broadcast_ss(&rad_2);
 
   __m256 a = _mm256_mul_ps(rays->dir.x, rays->dir.x);
   a = _mm256_fmadd_ps(rays->dir.y, rays->dir.y, a);
@@ -31,10 +36,6 @@
   __m256 c = _mm256_mul_ps(oc_x, oc_x);
   c = _mm256_fmadd_ps(oc_y, oc_y, c);
   c = _mm256_fmadd_ps(oc_z, oc_z, c);
-
-  float rad_2 = sphere.r * sphere.r;
-  __m256 rad_2_vec = _mm256_broadcast_ss(&rad_2);
-
   c = _mm256_sub_ps(c, rad_2_vec);
 
   __m256 discrim = _mm256_mul_ps(a, c);
@@ -91,28 +92,26 @@ inline static void create_hit_record(HitRecords* hit_rec, const RayCluster* rays
   hit_rec->orig.y = _mm256_add_ps(ray_orig_y, dir_yt);
   hit_rec->orig.z = _mm256_add_ps(ray_orig_z, dir_zt);
 
-  hit_rec->norm.x = _mm256_sub_ps(hit_rec->orig.x, sphere_cluster->center.x);
-  hit_rec->norm.y = _mm256_sub_ps(hit_rec->orig.y, sphere_cluster->center.y);
-  hit_rec->norm.z = _mm256_sub_ps(hit_rec->orig.z, sphere_cluster->center.z);
+  __m256 norm_x = _mm256_sub_ps(hit_rec->orig.x, sphere_cluster->center.x);
+  __m256 norm_y = _mm256_sub_ps(hit_rec->orig.y, sphere_cluster->center.y);
+  __m256 norm_z = _mm256_sub_ps(hit_rec->orig.z, sphere_cluster->center.z);
 
   __m256 recip_radius = _mm256_rcp_ps(sphere_cluster->r);
 
-  hit_rec->norm.x = _mm256_mul_ps(hit_rec->norm.x, recip_radius);
-  hit_rec->norm.y = _mm256_mul_ps(hit_rec->norm.y, recip_radius);
-  hit_rec->norm.z = _mm256_mul_ps(hit_rec->norm.z, recip_radius);
+  // normalize
+  hit_rec->norm.x = _mm256_mul_ps(norm_x, recip_radius);
+  hit_rec->norm.y = _mm256_mul_ps(norm_y, recip_radius);
+  hit_rec->norm.z = _mm256_mul_ps(norm_z, recip_radius);
 }
 
-/*
-  UPDATING SPHERES
-  1. create mask where less condition is met
-  2. mask new sphere vals to ignore where t's were higher than previous
-  3. negate the mask to find where the less condition wasn't met
-  4. AND the existing spheres with it to only preserve where it isn't less
-  5. add the two masked registers together to form updated sphere cluster
- */
 // updates a sphere cluster with a sphere given a mask of where to insert the new sphere's values
 inline static void update_sphere_cluster(SphereCluster* curr_cluster, Sphere curr_sphere,
                                          __m256 update_mask) {
+
+  if (_mm256_testz_ps(update_mask, update_mask)) {
+    return;
+  }
+
   __m256 new_sphere_x = _mm256_broadcast_ss(&curr_sphere.center.x);
   __m256 new_sphere_y = _mm256_broadcast_ss(&curr_sphere.center.y);
   __m256 new_sphere_z = _mm256_broadcast_ss(&curr_sphere.center.z);
@@ -168,12 +167,15 @@ inline static void find_sphere_hits(HitRecords* hit_rec, const Sphere* spheres,
   __m256 max = _mm256_broadcast_ss(&FLOAT_MAX);
 
   // find first sphere as a baseline
-  __m256 lowest_t_vals = sphere_hit(rays, t_max, spheres[0]);
+  __m256 lowest_t_vals = sphere_hit(rays, t_max, &spheres[0]);
   __m256 hit_loc = _mm256_cmp_ps(lowest_t_vals, zeros, CMPNEQ);
+
+  // if (!_mm256_testz_ps(hit_loc, hit_loc)) {
   update_sphere_cluster(&closest_spheres, spheres[0], hit_loc);
+  //}
 
   for (int i = 1; i < SPHERE_NUM; i++) {
-    __m256 new_t_vals = sphere_hit(rays, t_max, spheres[i]);
+    __m256 new_t_vals = sphere_hit(rays, t_max, &spheres[i]);
 
     // don't update on instances of no hits (hit locations all zeros)
     hit_loc = _mm256_cmp_ps(new_t_vals, zeros, CMPNEQ);
@@ -195,7 +197,9 @@ inline static void find_sphere_hits(HitRecords* hit_rec, const Sphere* spheres,
     // update sphere references based on where new
     // t values are closer than the current lowest
     __m256 update_locs = _mm256_cmp_ps(new_t_vals, lowest_t_masked, CMPLT);
+    //   if (!_mm256_testz_ps(update_locs, update_locs)) {
     update_sphere_cluster(&closest_spheres, spheres[i], update_locs);
+    //  }
 
     // update current lowest t values based on new t's, however, mask out
     // where we put float max values so that the t values still represent

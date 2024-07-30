@@ -117,9 +117,10 @@ inline static Color_256 ray_cluster_colors(RayCluster* rays, const Sphere* spher
   return colors;
 };
 
-// gets us the first pixels row of sample directions.
-// subsequent render iterations will simply scale this by row and column index
-// to find where to take samples
+// gets us the first pixels row of sample directions during compile time.
+//
+// subsequent render iterations will simply scale this by
+// row and column index to find where to take samples
 consteval RayCluster generate_init_directions() {
 
   Vec3 top_left{
@@ -152,9 +153,10 @@ consteval RayCluster generate_init_directions() {
   return init_dirs;
 }
 
+// writes a color buffer of 32 Color values to an image buffer
+// uses non temporal writes to avoid filling data cache
 inline static void write_out_color_buf(const Color* color_buf, CharColor* img_buf,
                                        uint32_t write_pos) {
-  // when temp buffer is full, flush to the image
   __m256 cm = _mm256_broadcast_ss(&COLOR_MULTIPLIER);
   __m256 colors_1_f32 = _mm256_mul_ps(_mm256_load_ps((float*)color_buf), cm);
   __m256 colors_2_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 8), cm);
