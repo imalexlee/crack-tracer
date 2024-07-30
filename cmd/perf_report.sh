@@ -1,2 +1,2 @@
 #!/bin/sh
-perf report -Mintel ../out/test/perf.data
+sudo perf report -Mintel ../out/test/perf.data

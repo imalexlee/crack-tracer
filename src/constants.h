@@ -27,4 +27,4 @@ constexpr float FOCAL_LEN = 1.0;
 constexpr float COLOR_MULTIPLIER = 255.f / (SAMPLE_GROUP_NUM * 8);
 constexpr bool MULTITHREADING_ENABLED = true;
 constexpr uint8_t THREAD_COUNT = 50;
-alignas(32) constexpr float CAM_ORIGIN[4] = {0.f, 0.f, 0.f, 0.f};
+alignas(32) constexpr float CAM_ORIGIN[4] = {0.f, 0.f, 0.0f, 0.f};
