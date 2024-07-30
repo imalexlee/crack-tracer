@@ -5,12 +5,12 @@
 #include <immintrin.h>
 
 // Returns hit t values or 0 depending on if this ray hit this sphere or not
-[[nodiscard]] inline static __m256 sphere_hit(const RayCluster* rays, float t_max,
-                                              const Sphere* sphere) {
+[[nodiscard]] inline static __m256 sphere_hit(const RayCluster* rays, const Sphere* sphere,
+                                              const Vec4* cam_origin, float t_max) {
 
   // will also copy radius in but thats ok
   __m128 sphere_center = _mm_load_ps(&sphere->center.x);
-  __m128 ray_orig = _mm_load_ps(CAM_ORIGIN);
+  __m128 ray_orig = _mm_load_ps((float*)cam_origin);
   __m128 oc = _mm_sub_ps(sphere_center, ray_orig);
 
   __m256 oc_x = _mm256_broadcastss_ps(oc);
@@ -69,8 +69,9 @@
   return root;
 }
 
-inline static void create_hit_record(HitRecords* hit_rec, const RayCluster* rays, __m256 t_vals,
-                                     SphereCluster* sphere_cluster) {
+inline static void create_hit_record(HitRecords* hit_rec, const RayCluster* rays,
+                                     SphereCluster* sphere_cluster, const Vec4* cam_origin,
+                                     __m256 t_vals) {
   hit_rec->t = t_vals;
   hit_rec->mat = sphere_cluster->mat;
 
@@ -78,7 +79,7 @@ inline static void create_hit_record(HitRecords* hit_rec, const RayCluster* rays
   __m256 dir_yt = _mm256_mul_ps(rays->dir.y, t_vals);
   __m256 dir_zt = _mm256_mul_ps(rays->dir.z, t_vals);
 
-  __m128 ray_orig = _mm_load_ps(CAM_ORIGIN);
+  __m128 ray_orig = _mm_load_ps((float*)cam_origin);
   __m256 ray_orig_x = _mm256_broadcastss_ps(ray_orig);
 
   __m128 ray_orig_temp_y = _mm_shuffle_ps(ray_orig, ray_orig, SHUF_ALL_SECOND);
@@ -150,7 +151,7 @@ inline static void update_sphere_cluster(SphereCluster* curr_cluster, Sphere cur
 };
 
 inline static void find_sphere_hits(HitRecords* hit_rec, const Sphere* spheres,
-                                    const RayCluster* rays, float t_max) {
+                                    const RayCluster* rays, const Vec4* cam_origin, float t_max) {
 
   __m256 zeros = _mm256_setzero_ps();
   SphereCluster closest_spheres = {
@@ -166,7 +167,7 @@ inline static void find_sphere_hits(HitRecords* hit_rec, const Sphere* spheres,
   __m256 max = _mm256_broadcast_ss(&FLOAT_MAX);
 
   // find first sphere as a baseline
-  __m256 lowest_t_vals = sphere_hit(rays, t_max, &spheres[0]);
+  __m256 lowest_t_vals = sphere_hit(rays, &spheres[0], cam_origin, t_max);
   __m256 hit_loc = _mm256_cmp_ps(lowest_t_vals, zeros, CMPNEQ);
 
   // if (!_mm256_testz_ps(hit_loc, hit_loc)) {
@@ -174,7 +175,7 @@ inline static void find_sphere_hits(HitRecords* hit_rec, const Sphere* spheres,
   //}
 
   for (int i = 1; i < SPHERE_NUM; i++) {
-    __m256 new_t_vals = sphere_hit(rays, t_max, &spheres[i]);
+    __m256 new_t_vals = sphere_hit(rays, &spheres[i], cam_origin, t_max);
 
     // don't update on instances of no hits (hit locations all zeros)
     hit_loc = _mm256_cmp_ps(new_t_vals, zeros, CMPNEQ);
@@ -208,5 +209,5 @@ inline static void find_sphere_hits(HitRecords* hit_rec, const Sphere* spheres,
     lowest_t_vals = _mm256_and_ps(lowest_t_vals, actual_vals_loc);
   }
 
-  create_hit_record(hit_rec, rays, lowest_t_vals, &closest_spheres);
+  create_hit_record(hit_rec, rays, &closest_spheres, cam_origin, lowest_t_vals);
 }

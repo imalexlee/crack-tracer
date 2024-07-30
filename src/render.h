@@ -4,7 +4,6 @@
 #include "math.h"
 #include "sphere.h"
 #include "types.h"
-#include "utils.h"
 #include <cmath>
 #include <csignal>
 #include <cstdint>
@@ -83,7 +82,8 @@ inline static void update_colors(Color_256* curr_colors, const Color_256* new_co
   curr_colors->b = _mm256_mul_ps(curr_colors->b, b);
 }
 
-inline static Color_256 ray_cluster_colors(RayCluster* rays, const Sphere* spheres, uint8_t depth) {
+inline static Color_256 ray_cluster_colors(RayCluster* rays, const Sphere* spheres,
+                                           const Vec4* cam_origin, uint8_t depth) {
   const __m256 zeros = _mm256_setzero_ps();
   // will be used to add a sky tint to rays that at some point bounce off into space.
   // if a ray never bounces away (within amount of bounces set by depth), the
@@ -98,7 +98,7 @@ inline static Color_256 ray_cluster_colors(RayCluster* rays, const Sphere* spher
 
   for (int i = 0; i < depth; i++) {
 
-    find_sphere_hits(&hit_rec, spheres, rays, INFINITY);
+    find_sphere_hits(&hit_rec, spheres, rays, cam_origin, INFINITY);
 
     __m256 new_hit_mask = _mm256_cmp_ps(hit_rec.t, zeros, CMPNLE);
     // or a mask when a value is not a hit, at any point. if all are zero,
@@ -229,7 +229,8 @@ inline static void write_out_color_buf(const Color* color_buf, CharColor* img_bu
   memcpy(((__m256i*)img_buf) + write_pos, char_buf, 96 * sizeof(CharColor));
 }
 
-inline static void render(CharColor* img_buf, uint32_t pixel_count, uint32_t pix_offset) {
+inline static void render(CharColor* img_buf, const Vec4 cam_origin, uint32_t pixel_count,
+                          uint32_t pix_offset) {
   constexpr RayCluster base_dirs = generate_init_directions();
 
   Color_256 sample_color;
@@ -248,10 +249,7 @@ inline static void render(CharColor* img_buf, uint32_t pixel_count, uint32_t pix
       sample_color.r = _mm256_setzero_ps();
       sample_color.g = _mm256_setzero_ps();
       sample_color.b = _mm256_setzero_ps();
-      // 64 samples per pixel. 8 rays calculated 8 times
-      // if (row > IMG_HEIGHT / 2 && col > IMG_WIDTH / 2) {
-      //  BREAKPOINT
-      //}
+
       for (sample_group = 0; sample_group < SAMPLE_GROUP_NUM; sample_group++) {
 
         RayCluster samples = base_dirs;
@@ -264,7 +262,7 @@ inline static void render(CharColor* img_buf, uint32_t pixel_count, uint32_t pix
         samples.dir.x = _mm256_add_ps(samples.dir.x, x_scale_vec);
         samples.dir.y = _mm256_add_ps(samples.dir.y, y_scale_vec);
 
-        Color_256 new_colors = ray_cluster_colors(&samples, spheres, 10);
+        Color_256 new_colors = ray_cluster_colors(&samples, spheres, &cam_origin, 10);
         sample_color.r = _mm256_add_ps(sample_color.r, new_colors.r);
         sample_color.g = _mm256_add_ps(sample_color.g, new_colors.g);
         sample_color.b = _mm256_add_ps(sample_color.b, new_colors.b);
