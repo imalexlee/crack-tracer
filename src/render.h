@@ -4,6 +4,7 @@
 #include "math.h"
 #include "sphere.h"
 #include "types.h"
+#include "utils.h"
 #include <cmath>
 #include <csignal>
 #include <cstdint>
@@ -220,9 +221,12 @@ inline static void write_out_color_buf(const Color* color_buf, CharColor* img_bu
   __m256i colors_2_u8 = _mm256_packus_epi16(temp_permute_3, temp_permute_4);
   __m256i colors_3_u8 = _mm256_packus_epi16(temp_permute_5, temp_permute_6);
 
-  _mm256_stream_si256(((__m256i*)img_buf) + write_pos, colors_1_u8);
-  _mm256_stream_si256(((__m256i*)img_buf) + write_pos + 1, colors_2_u8);
-  _mm256_stream_si256(((__m256i*)img_buf) + write_pos + 2, colors_3_u8);
+  alignas(32) CharColor char_buf[96];
+  _mm256_store_si256(((__m256i*)char_buf), colors_1_u8);
+  _mm256_store_si256(((__m256i*)char_buf) + 1, colors_2_u8);
+  _mm256_store_si256(((__m256i*)char_buf) + 2, colors_3_u8);
+
+  memcpy(((__m256i*)img_buf) + write_pos, char_buf, 96 * sizeof(CharColor));
 }
 
 inline static void render(CharColor* img_buf, uint32_t pixel_count, uint32_t pix_offset) {

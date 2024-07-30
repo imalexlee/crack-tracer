@@ -1,7 +1,6 @@
 #pragma once
 #include "constants.h"
 #include "globals.h"
-#include "sphere.h"
 #include "types.h"
 #include <immintrin.h>
 
