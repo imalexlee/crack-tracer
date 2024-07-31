@@ -10,43 +10,6 @@
 #include <cstdio>
 #include <cstring>
 #include <immintrin.h>
-#include <span>
-
-constexpr Color_256 silver_attenuation = {
-    .r = {0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f},
-    .g = {0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f},
-    .b = {0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f},
-};
-
-constexpr Color silver = {
-    .r = 0.66f,
-    .g = 0.66f,
-    .b = 0.66f,
-};
-
-constexpr Color red = {
-    .r = 0.90f,
-    .g = 0.20f,
-    .b = 0.20f,
-};
-constexpr Color gold = {
-    .r = 0.85f,
-    .g = 0.70f,
-    .b = 0.24f,
-};
-
-constexpr Material materials[] = {
-    {.atten = silver},
-    {.atten = red},
-    {.atten = gold},
-};
-
-constexpr Sphere spheres[] = {
-    {.center = {.x = 0.f, .y = 0.f, .z = -1.2f}, .mat = materials[0], .r = 0.5f},
-    {.center = {.x = -1.f, .y = 0.f, .z = -1.f}, .mat = materials[1], .r = 0.4f},
-    {.center = {.x = 1.f, .y = 0.f, .z = -1.f}, .mat = materials[2], .r = 0.4f},
-    //{.center = {.x = 0.f, .y = -100.5f, .z = -1.f}, .mat = materials[2], .r = 100.f},
-};
 
 constexpr Color_256 sky = {
     .r = {0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f},
@@ -83,8 +46,8 @@ inline static void update_colors(Color_256* curr_colors, const Color_256* new_co
   curr_colors->b = _mm256_mul_ps(curr_colors->b, b);
 }
 
-inline static Color_256 ray_cluster_colors(RayCluster* rays, const std::span<const Sphere> spheres,
-                                           const Vec4* cam_origin, uint8_t depth) {
+inline static Color_256 ray_cluster_colors(RayCluster* rays, const Vec4* cam_origin,
+                                           uint8_t depth) {
   const __m256 zeros = _mm256_setzero_ps();
   // will be used to add a sky tint to rays that at some point bounce off into space.
   // if a ray never bounces away (within amount of bounces set by depth), the
@@ -99,7 +62,7 @@ inline static Color_256 ray_cluster_colors(RayCluster* rays, const std::span<con
 
   for (int i = 0; i < depth; i++) {
 
-    find_sphere_hits(&hit_rec, spheres, rays, cam_origin, INFINITY);
+    find_sphere_hits(&hit_rec, rays, cam_origin, INFINITY);
 
     __m256 new_hit_mask = _mm256_cmp_ps(hit_rec.t, zeros, CMPNLE);
     // or a mask when a value is not a hit, at any point. if all are zero,
@@ -279,7 +242,7 @@ inline static void render(CharColor* img_buf, const Vec4 cam_origin, uint32_t pi
         samples.dir.x = _mm256_add_ps(samples.dir.x, x_scale_vec);
         samples.dir.y = _mm256_add_ps(samples.dir.y, y_scale_vec);
 
-        Color_256 new_colors = ray_cluster_colors(&samples, spheres, &cam_origin, 10);
+        Color_256 new_colors = ray_cluster_colors(&samples, &cam_origin, 10);
         sample_color.r = _mm256_add_ps(sample_color.r, new_colors.r);
         sample_color.g = _mm256_add_ps(sample_color.g, new_colors.g);
         sample_color.b = _mm256_add_ps(sample_color.b, new_colors.b);

@@ -31,5 +31,5 @@ constexpr float SAMPLE_DV = PIX_DV / (SAMPLE_GROUP_NUM + 1);
 constexpr float FOCAL_LEN = 1.0;
 constexpr float COLOR_MULTIPLIER = 255.f / (SAMPLE_GROUP_NUM * 8);
 constexpr uint8_t THREAD_COUNT = 50;
-constexpr RENDER_MODE ACTIVE_RENDER_MODE = RENDER_MODE::REAL_TIME;
+constexpr RENDER_MODE ACTIVE_RENDER_MODE = RENDER_MODE::PNG;
 alignas(32) constexpr float CAM_ORIGIN[4] = {0.f, 0.f, 0.0f, 0.f};

@@ -2,8 +2,38 @@
 #include "constants.h"
 #include "globals.h"
 #include "types.h"
+#include <array>
 #include <immintrin.h>
-#include <span>
+
+constexpr Color silver = {
+    .r = 0.66f,
+    .g = 0.66f,
+    .b = 0.66f,
+};
+
+constexpr Color red = {
+    .r = 0.90f,
+    .g = 0.20f,
+    .b = 0.20f,
+};
+constexpr Color gold = {
+    .r = 0.85f,
+    .g = 0.70f,
+    .b = 0.24f,
+};
+
+constexpr Material materials[] = {
+    {.atten = silver},
+    {.atten = red},
+    {.atten = gold},
+};
+
+constexpr auto spheres = std::to_array<Sphere>({
+    {.center = {.x = 0.f, .y = 0.f, .z = -1.2f}, .mat = materials[0], .r = 0.5f},
+    {.center = {.x = -1.f, .y = 0.f, .z = -1.f}, .mat = materials[1], .r = 0.4f},
+    {.center = {.x = 1.f, .y = 0.f, .z = -1.f}, .mat = materials[2], .r = 0.4f},
+    //{.center = {.x = 0.f, .y = -100.5f, .z = -1.f}, .mat = materials[2], .r = 100.f},
+});
 
 // Returns hit t values or 0 depending on if this ray hit this sphere or not
 [[nodiscard]] inline static __m256 sphere_hit(const RayCluster* rays, const Sphere* sphere,
@@ -151,8 +181,8 @@ inline static void update_sphere_cluster(SphereCluster* curr_cluster, Sphere cur
   curr_cluster->mat.atten.b = _mm256_add_ps(new_sphere_atten_b, curr_sphere_atten_b);
 };
 
-inline static void find_sphere_hits(HitRecords* hit_rec, const std::span<const Sphere> spheres,
-                                    const RayCluster* rays, const Vec4* cam_origin, float t_max) {
+inline static void find_sphere_hits(HitRecords* hit_rec, const RayCluster* rays,
+                                    const Vec4* cam_origin, float t_max) {
 
   __m256 zeros = _mm256_setzero_ps();
   SphereCluster closest_spheres = {
@@ -171,9 +201,7 @@ inline static void find_sphere_hits(HitRecords* hit_rec, const std::span<const S
   __m256 lowest_t_vals = sphere_hit(rays, &spheres[0], cam_origin, t_max);
   __m256 hit_loc = _mm256_cmp_ps(lowest_t_vals, zeros, CMPNEQ);
 
-  // if (!_mm256_testz_ps(hit_loc, hit_loc)) {
   update_sphere_cluster(&closest_spheres, spheres[0], hit_loc);
-  //}
 
   for (size_t i = 1; i < spheres.size(); i++) {
     __m256 new_t_vals = sphere_hit(rays, &spheres[i], cam_origin, t_max);
@@ -198,9 +226,7 @@ inline static void find_sphere_hits(HitRecords* hit_rec, const std::span<const S
     // update sphere references based on where new
     // t values are closer than the current lowest
     __m256 update_locs = _mm256_cmp_ps(new_t_vals, lowest_t_masked, CMPLT);
-    //   if (!_mm256_testz_ps(update_locs, update_locs)) {
     update_sphere_cluster(&closest_spheres, spheres[i], update_locs);
-    //  }
 
     // update current lowest t values based on new t's, however, mask out
     // where we put float max values so that the t values still represent
