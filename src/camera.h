@@ -1,7 +1,9 @@
+#pragma once
 #include "types.h"
 #include <SDL_events.h>
 #include <SDL_keycode.h>
 #include <cstdint>
+
 class Camera {
 public:
   Vec4 origin = {0, 0, 0, 0};
