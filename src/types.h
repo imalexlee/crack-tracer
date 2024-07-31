@@ -8,6 +8,13 @@ struct Vec3 {
   float z;
 };
 
+struct Vec4 {
+  float x;
+  float y;
+  float z;
+  float w;
+};
+
 struct Vec3_256 {
   __m256 x;
   __m256 y;

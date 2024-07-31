@@ -11,42 +11,6 @@
 #include <cstring>
 #include <immintrin.h>
 
-constexpr Color_256 silver_attenuation = {
-    .r = {0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f},
-    .g = {0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f},
-    .b = {0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f, 0.66f},
-};
-
-constexpr Color silver = {
-    .r = 0.66f,
-    .g = 0.66f,
-    .b = 0.66f,
-};
-
-constexpr Color red = {
-    .r = 0.90f,
-    .g = 0.20f,
-    .b = 0.20f,
-};
-constexpr Color gold = {
-    .r = 0.85f,
-    .g = 0.70f,
-    .b = 0.24f,
-};
-
-constexpr Material materials[SPHERE_NUM] = {
-    {.atten = silver},
-    {.atten = red},
-    {.atten = gold},
-};
-
-constexpr Sphere spheres[SPHERE_NUM] = {
-    {.center = {.x = 0.f, .y = 0.f, .z = -1.2f}, .mat = materials[0], .r = 0.5f},
-    {.center = {.x = -1.f, .y = 0.f, .z = -1.f}, .mat = materials[1], .r = 0.4f},
-    {.center = {.x = 1.f, .y = 0.f, .z = -1.f}, .mat = materials[2], .r = 0.4f},
-    //{.center = {.x = 0.f, .y = -100.5f, .z = -1.f}, .mat = materials[2], .r = 100.f},
-};
-
 constexpr Color_256 sky = {
     .r = {0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f},
     .g = {0.7f, 0.7f, 0.7f, 0.7f, 0.7f, 0.7f, 0.7f, 0.7f},
@@ -82,7 +46,8 @@ inline static void update_colors(Color_256* curr_colors, const Color_256* new_co
   curr_colors->b = _mm256_mul_ps(curr_colors->b, b);
 }
 
-inline static Color_256 ray_cluster_colors(RayCluster* rays, const Sphere* spheres, uint8_t depth) {
+inline static Color_256 ray_cluster_colors(RayCluster* rays, const Vec4* cam_origin,
+                                           uint8_t depth) {
   const __m256 zeros = _mm256_setzero_ps();
   // will be used to add a sky tint to rays that at some point bounce off into space.
   // if a ray never bounces away (within amount of bounces set by depth), the
@@ -97,7 +62,7 @@ inline static Color_256 ray_cluster_colors(RayCluster* rays, const Sphere* spher
 
   for (int i = 0; i < depth; i++) {
 
-    find_sphere_hits(&hit_rec, spheres, rays, INFINITY);
+    find_sphere_hits(&hit_rec, rays, cam_origin, INFINITY);
 
     __m256 new_hit_mask = _mm256_cmp_ps(hit_rec.t, zeros, CMPNLE);
     // or a mask when a value is not a hit, at any point. if all are zero,
@@ -220,12 +185,32 @@ inline static void write_out_color_buf(const Color* color_buf, CharColor* img_bu
   __m256i colors_2_u8 = _mm256_packus_epi16(temp_permute_3, temp_permute_4);
   __m256i colors_3_u8 = _mm256_packus_epi16(temp_permute_5, temp_permute_6);
 
-  _mm256_stream_si256(((__m256i*)img_buf) + write_pos, colors_1_u8);
-  _mm256_stream_si256(((__m256i*)img_buf) + write_pos + 1, colors_2_u8);
-  _mm256_stream_si256(((__m256i*)img_buf) + write_pos + 2, colors_3_u8);
+  // SDL offsets our img pointer to a location that might not be aligned to 32 bytes.
+  // Therefore we can't just stream from the registers to memory... :(
+  if constexpr (ACTIVE_RENDER_MODE == RENDER_MODE::REAL_TIME) {
+    alignas(32) CharColor char_buf[32];
+    _mm256_store_si256(((__m256i*)char_buf), colors_1_u8);
+    _mm256_store_si256(((__m256i*)char_buf) + 1, colors_2_u8);
+    _mm256_store_si256(((__m256i*)char_buf) + 2, colors_3_u8);
+
+    int* img_ints = (int*)(((__m256i*)img_buf) + write_pos);
+    int* color_ints = (int*)(char_buf);
+
+    for (int i = 0; i < 24; i += 4) {
+      _mm_stream_si32((img_ints + i), *(color_ints + i));
+      _mm_stream_si32((img_ints + i + 1), *(color_ints + i + 1));
+      _mm_stream_si32((img_ints + i + 2), *(color_ints + i + 2));
+      _mm_stream_si32((img_ints + i + 3), *(color_ints + i + 3));
+    }
+  } else {
+    _mm256_stream_si256(((__m256i*)img_buf) + write_pos, colors_1_u8);
+    _mm256_stream_si256(((__m256i*)img_buf) + write_pos + 1, colors_2_u8);
+    _mm256_stream_si256(((__m256i*)img_buf) + write_pos + 2, colors_3_u8);
+  }
 }
 
-inline static void render(CharColor* img_buf, uint32_t pixel_count, uint32_t pix_offset) {
+inline static void render(CharColor* img_buf, const Vec4 cam_origin, uint32_t pixel_count,
+                          uint32_t pix_offset) {
   constexpr RayCluster base_dirs = generate_init_directions();
 
   Color_256 sample_color;
@@ -244,10 +229,7 @@ inline static void render(CharColor* img_buf, uint32_t pixel_count, uint32_t pix
       sample_color.r = _mm256_setzero_ps();
       sample_color.g = _mm256_setzero_ps();
       sample_color.b = _mm256_setzero_ps();
-      // 64 samples per pixel. 8 rays calculated 8 times
-      // if (row > IMG_HEIGHT / 2 && col > IMG_WIDTH / 2) {
-      //  BREAKPOINT
-      //}
+
       for (sample_group = 0; sample_group < SAMPLE_GROUP_NUM; sample_group++) {
 
         RayCluster samples = base_dirs;
@@ -260,7 +242,7 @@ inline static void render(CharColor* img_buf, uint32_t pixel_count, uint32_t pix
         samples.dir.x = _mm256_add_ps(samples.dir.x, x_scale_vec);
         samples.dir.y = _mm256_add_ps(samples.dir.y, y_scale_vec);
 
-        Color_256 new_colors = ray_cluster_colors(&samples, spheres, 10);
+        Color_256 new_colors = ray_cluster_colors(&samples, &cam_origin, 10);
         sample_color.r = _mm256_add_ps(sample_color.r, new_colors.r);
         sample_color.g = _mm256_add_ps(sample_color.g, new_colors.g);
         sample_color.b = _mm256_add_ps(sample_color.b, new_colors.b);
