@@ -2,18 +2,12 @@
 #include "camera.h"
 #include "constants.h"
 #include "globals.h"
+#include "materials.h"
 #include "math.h"
 #include "sphere.h"
 #include "types.h"
 #include <SDL2/SDL.h>
-#include <cassert>
 #include <chrono>
-#include <cmath>
-#include <csignal>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
 #include <future>
 #include <immintrin.h>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -23,12 +17,6 @@ constexpr Color_256 sky = {
     .r = {0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f},
     .g = {0.7f, 0.7f, 0.7f, 0.7f, 0.7f, 0.7f, 0.7f, 0.7f},
     .b = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f},
-};
-
-inline static void scatter_metallic(RayCluster* rays, const HitRecords* hit_rec) {
-  // reflect ray direction about the hit record normal
-  reflect(&rays->dir, &hit_rec->norm);
-  normalize(&rays->dir);
 };
 
 inline static void update_colors(Color_256* curr_colors, const Color_256* new_colors,
@@ -81,7 +69,7 @@ inline static Color_256 ray_cluster_colors(RayCluster* rays, const Vec4* cam_ori
       break;
     }
 
-    scatter_metallic(rays, &hit_rec);
+    scatter(rays, &hit_rec);
     update_colors(&colors, &hit_rec.mat.atten, new_hit_mask);
   }
 
@@ -297,6 +285,7 @@ inline static void render_png() {
   Camera cam;
 
   auto start_time = system_clock::now();
+
   for (size_t idx = 0; idx < THREAD_COUNT; idx++) {
     futures[idx] =
         std::async(std::launch::async, render, img_data, cam.origin, chunk_size, idx * chunk_size);
@@ -305,6 +294,7 @@ inline static void render_png() {
   for (size_t idx = 0; idx < THREAD_COUNT; idx++) {
     futures[idx].get();
   }
+
   auto end_time = system_clock::now();
   auto dur = duration<float>(end_time - start_time);
   float milli = duration_cast<microseconds>(dur).count() / 1000.f;

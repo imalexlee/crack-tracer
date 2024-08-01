@@ -39,12 +39,19 @@ struct Color_256 {
   __m256 b;
 };
 
-struct alignas(16) Material {
-  Color atten;
+enum MatType {
+  metallic,
+  lambertian,
 };
 
 struct Material_256 {
   Color_256 atten;
+  __m256i type;
+};
+
+struct alignas(16) Material {
+  Color atten;
+  MatType type;
 };
 
 struct alignas(32) Sphere {

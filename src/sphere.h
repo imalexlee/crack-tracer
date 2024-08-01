@@ -16,23 +16,22 @@ constexpr Color red = {
     .g = 0.20f,
     .b = 0.20f,
 };
+
 constexpr Color gold = {
     .r = 0.85f,
     .g = 0.70f,
     .b = 0.24f,
 };
 
-constexpr Material materials[] = {
-    {.atten = silver},
-    {.atten = red},
-    {.atten = gold},
-};
+constexpr Material silver_metallic = {.atten = silver, .type = MatType::metallic};
+constexpr Material red_metallic = {.atten = red, .type = MatType::metallic};
+constexpr Material gold_metallic = {.atten = gold, .type = MatType::lambertian};
 
 constexpr auto spheres = std::to_array<Sphere>({
-    {.center = {.x = 0.f, .y = 0.f, .z = -1.2f}, .mat = materials[0], .r = 0.5f},
-    {.center = {.x = -1.f, .y = 0.f, .z = -1.f}, .mat = materials[1], .r = 0.4f},
-    {.center = {.x = 1.f, .y = 0.f, .z = -1.f}, .mat = materials[2], .r = 0.4f},
-    //{.center = {.x = 0.f, .y = -100.5f, .z = -1.f}, .mat = materials[2], .r = 100.f},
+    {.center = {.x = 0.f, .y = 0.f, .z = -1.2f}, .mat = silver_metallic, .r = 0.5f},
+    {.center = {.x = -1.f, .y = 0.f, .z = -1.f}, .mat = red_metallic, .r = 0.4f},
+    {.center = {.x = 1.f, .y = 0.f, .z = -1.f}, .mat = gold_metallic, .r = 0.4f},
+    //{.center = {.x = 0.f, .y = -100.5f, .z = -1.f}, .mat = silver_metallic, .r = 100.f},
 });
 
 // Returns hit t values or 0 depending on if this ray hit this sphere or not
@@ -150,6 +149,7 @@ inline static void update_sphere_cluster(SphereCluster* curr_cluster, Sphere cur
   __m256 new_sphere_atten_r = _mm256_broadcast_ss(&curr_sphere.mat.atten.r);
   __m256 new_sphere_atten_g = _mm256_broadcast_ss(&curr_sphere.mat.atten.g);
   __m256 new_sphere_atten_b = _mm256_broadcast_ss(&curr_sphere.mat.atten.b);
+  __m256i new_sphere_mat_type = _mm256_set1_epi32(curr_sphere.mat.type);
 
   // preserve new sphere values where a new minimum was found
   new_sphere_x = _mm256_and_ps(new_sphere_x, update_mask);
@@ -159,6 +159,7 @@ inline static void update_sphere_cluster(SphereCluster* curr_cluster, Sphere cur
   new_sphere_atten_r = _mm256_and_ps(new_sphere_atten_r, update_mask);
   new_sphere_atten_g = _mm256_and_ps(new_sphere_atten_g, update_mask);
   new_sphere_atten_b = _mm256_and_ps(new_sphere_atten_b, update_mask);
+  new_sphere_mat_type = _mm256_and_si256(new_sphere_mat_type, (__m256i)update_mask);
 
   // negation of update locations so we can preserve current values
   // while clearing bits where we will update
@@ -171,6 +172,7 @@ inline static void update_sphere_cluster(SphereCluster* curr_cluster, Sphere cur
   __m256 curr_sphere_atten_r = _mm256_and_ps(curr_cluster->mat.atten.r, preserve_curr);
   __m256 curr_sphere_atten_g = _mm256_and_ps(curr_cluster->mat.atten.g, preserve_curr);
   __m256 curr_sphere_atten_b = _mm256_and_ps(curr_cluster->mat.atten.b, preserve_curr);
+  __m256i curr_sphere_mat_type = _mm256_and_si256(curr_cluster->mat.type, (__m256i)preserve_curr);
 
   curr_cluster->center.x = _mm256_add_ps(new_sphere_x, curr_sphere_x);
   curr_cluster->center.y = _mm256_add_ps(new_sphere_y, curr_sphere_y);
@@ -179,6 +181,7 @@ inline static void update_sphere_cluster(SphereCluster* curr_cluster, Sphere cur
   curr_cluster->mat.atten.r = _mm256_add_ps(new_sphere_atten_r, curr_sphere_atten_r);
   curr_cluster->mat.atten.g = _mm256_add_ps(new_sphere_atten_g, curr_sphere_atten_g);
   curr_cluster->mat.atten.b = _mm256_add_ps(new_sphere_atten_b, curr_sphere_atten_b);
+  curr_cluster->mat.type = _mm256_add_epi32(new_sphere_mat_type, curr_sphere_mat_type);
 };
 
 inline static void find_sphere_hits(HitRecords* hit_rec, const RayCluster* rays,
