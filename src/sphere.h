@@ -17,23 +17,46 @@ constexpr Color red = {
 };
 
 constexpr Color gold = {
-    .r = 0.85f,
-    .g = 0.70f,
-    .b = 0.24f,
+    .r = 0.90f,
+    .g = 0.75f,
+    .b = 0.54f,
+};
+
+constexpr Color copper = {
+    .r = 0.59f,
+    .g = 0.34f,
+    .b = 0.29f,
+};
+
+constexpr Color green = {
+    .r = 0.f,
+    .g = 1.f,
+    .b = 0.f,
+};
+
+constexpr Color moon = {
+    .r = 2.f,
+    .g = 2.f,
+    .b = 2.f,
 };
 
 constexpr Material silver_metallic = {.atten = silver, .type = MatType::metallic};
 constexpr Material red_metallic = {.atten = red, .type = MatType::metallic};
 constexpr Material gold_metallic = {.atten = gold, .type = MatType::metallic};
+constexpr Material copper_metallic = {.atten = copper, .type = MatType::metallic};
+constexpr Material green_metallic = {.atten = green, .type = MatType::metallic};
 
 constexpr Material silver_lambertian = {.atten = silver, .type = MatType::lambertian};
 constexpr Material red_lambertian = {.atten = red, .type = MatType::lambertian};
 constexpr Material gold_lambertian = {.atten = gold, .type = MatType::lambertian};
 
+constexpr Material moon_emissive = {.atten = moon, .type = MatType::emissive};
+
 constexpr auto spheres = std::to_array<Sphere>({
-    {.center = {.x = 0.f, .y = 0.f, .z = -1.2f}, .mat = silver_metallic, .r = 0.5f},
+    {.center = {.x = 0.f, .y = 0.f, .z = -1.2f}, .mat = copper_metallic, .r = 0.5f},
     {.center = {.x = -1.f, .y = 0.f, .z = -1.f}, .mat = red_lambertian, .r = 0.4f},
-    {.center = {.x = 1.f, .y = 0.f, .z = -1.f}, .mat = gold_lambertian, .r = 0.4f},
+    {.center = {.x = 1.f, .y = 0.f, .z = -1.f}, .mat = gold_metallic, .r = 0.4f},
+    {.center = {.x = 0.7f, .y = 2.f, .z = -1.4f}, .mat = moon_emissive, .r = 0.4f},
     {.center = {.x = 0.f, .y = -100.5f, .z = -1.f}, .mat = silver_metallic, .r = 100.f},
 });
 

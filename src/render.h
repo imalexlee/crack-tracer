@@ -1,5 +1,6 @@
 #pragma once
 #include "camera.h"
+#include "comptime.h"
 #include "globals.h"
 #include "materials.h"
 #include "math.h"
@@ -16,6 +17,12 @@ constexpr Color_256 sky = {
     .r = {0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f},
     .g = {0.7f, 0.7f, 0.7f, 0.7f, 0.7f, 0.7f, 0.7f, 0.7f},
     .b = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f},
+};
+
+constexpr Color_256 night = {
+    .r = {0, 0, 0, 0, 0, 0, 0, 0},
+    .g = {0, 0, 0, 0, 0, 0, 0, 0},
+    .b = {0, 0, 0, 0, 0, 0, 0, 0},
 };
 
 inline static void update_colors(Color_256* curr_colors, const Color_256* new_colors,
@@ -58,12 +65,14 @@ inline static Color_256 ray_cluster_colors(RayCluster* rays, uint8_t depth) {
 
     find_sphere_hits(&hit_rec, rays, INFINITY);
 
-    __m256 new_hit_mask = _mm256_cmp_ps(hit_rec.t, zeros, global::cmpnle);
     // or a mask when a value is not a hit, at any point. if all are zero,
     // break
+    __m256 new_hit_mask = _mm256_cmp_ps(hit_rec.t, zeros, global::cmpnle);
     __m256 new_no_hit_mask = _mm256_xor_ps(new_hit_mask, global::all_set);
+
     no_hit_mask = _mm256_or_ps(no_hit_mask, new_no_hit_mask);
     if (_mm256_testz_ps(new_hit_mask, new_hit_mask)) {
+      update_colors(&colors, &sky, no_hit_mask);
       break;
     }
 
@@ -71,43 +80,8 @@ inline static Color_256 ray_cluster_colors(RayCluster* rays, uint8_t depth) {
     update_colors(&colors, &hit_rec.mat.atten, new_hit_mask);
   }
 
-  update_colors(&colors, &sky, no_hit_mask);
-
   return colors;
 };
-
-// gets us the first pixels row of sample directions during compile time.
-//
-// subsequent render iterations will simply scale this by
-// row and column index to find where to take samples
-consteval Vec3_256 generate_init_directions() {
-
-  Vec3 top_left{
-      .x = global::cam_origin[0] - global::viewport_width / 2,
-      .y = global::cam_origin[1] + global::viewport_height / 2,
-      .z = global::cam_origin[2] - global::focal_len,
-  };
-
-  top_left.x += global::sample_du;
-  top_left.y += global::sample_dv;
-
-  alignas(32) float x_arr[8];
-  x_arr[0] = top_left.x;
-  for (int i = 1; i < 8; i++) {
-    x_arr[i] = x_arr[i - 1] + global::sample_du;
-  }
-
-  Vec3_256 init_dirs = {
-      .x = {x_arr[0], x_arr[1], x_arr[2], x_arr[3], x_arr[4], x_arr[5], x_arr[6], x_arr[7]},
-      .y = {top_left.y, top_left.y, top_left.y, top_left.y, top_left.y, top_left.y, top_left.y,
-            top_left.y},
-      .z = {top_left.z, top_left.z, top_left.z, top_left.z, top_left.z, top_left.z, top_left.z,
-            top_left.z},
-
-  };
-
-  return init_dirs;
-}
 
 // writes a color buffer of 32 Color values to an image buffer
 // uses non temporal writes to avoid filling data cache
@@ -203,7 +177,8 @@ inline static void write_out_color_buf(const Color* color_buf, CharColor* img_bu
 
 inline static void render(CharColor* img_buf, const Vec4 cam_origin, uint32_t pixel_count,
                           uint32_t pix_offset) {
-  constexpr Vec3_256 base_dirs = generate_init_directions();
+  // comptime generated
+  constexpr Vec3_256 base_dirs = comptime::init_ray_directions();
   RayCluster base_rays = {
       .dir = base_dirs,
       .orig = {.x = _mm256_broadcast_ss(&cam_origin.x),

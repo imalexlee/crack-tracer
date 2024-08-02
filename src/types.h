@@ -42,6 +42,7 @@ struct Color_256 {
 enum MatType {
   metallic,
   lambertian,
+  emissive,
 };
 
 struct Material_256 {
