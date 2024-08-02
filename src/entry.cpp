@@ -1,10 +1,10 @@
-#include "constants.h"
+#include "globals.h"
 #include "render.h"
 
 int main() {
-  if constexpr (ACTIVE_RENDER_MODE == RENDER_MODE::REAL_TIME) {
+  if constexpr (global::active_render_mode == RenderMode::real_time) {
     render_realtime();
-  } else if constexpr (ACTIVE_RENDER_MODE == RENDER_MODE::PNG) {
+  } else if constexpr (global::active_render_mode == RenderMode::png) {
     render_png();
   }
 }

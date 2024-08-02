@@ -2,8 +2,6 @@
 #include "../src/render.h"
 #include "../src/sphere.h"
 #include "../src/utils.h"
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
 
 #include <cmath>
 #include <cstdint>
@@ -19,13 +17,13 @@ const RayCluster rays{.dir = {
 
 const Sphere sphere{
     .center = {.x = 0.f, .y = 0.f, .z = -1.f},
-    .mat = materials[0],
+    .mat = silver_metallic,
     .r = .5f,
 };
 
 void test_sphere_hit() {
   printf("TESTING SPHERE_HIT\n");
-  __m256 t_vals = sphere_hit(&rays, 1000.f, sphere);
+  __m256 t_vals = sphere_hit(&rays, &sphere, 1000.f);
   print_vec_256(t_vals);
   printf("\n");
 };
@@ -142,8 +140,23 @@ void test_image_write() {
 void test_render() {
   printf("TESTING RENDER\n");
   CharColor* img_data = (CharColor*)aligned_alloc(32, IMG_WIDTH * IMG_HEIGHT * sizeof(CharColor));
-  render(img_data, (IMG_WIDTH * IMG_HEIGHT) / 2, IMG_WIDTH * (IMG_HEIGHT / 2));
+  render(img_data, Vec4{0, 0, 0, 0}, (IMG_WIDTH * IMG_HEIGHT) / 2, IMG_WIDTH * (IMG_HEIGHT / 2));
   stbi_write_png("out.png", IMG_WIDTH, IMG_HEIGHT, 3, img_data, IMG_WIDTH * sizeof(CharColor));
+  printf("\n");
+}
+
+void test_rand() {
+  printf("TESTING RAND\n");
+  for (int i = 0; i < 10; i++) {
+
+    Vec3_256 rand_vec = rand_vec_in_cube();
+
+    print_vec_256(rand_vec.x);
+    print_vec_256(rand_vec.y);
+    print_vec_256(rand_vec.z);
+    printf("\n");
+  }
+
   printf("\n");
 }
 
@@ -154,6 +167,6 @@ int main() {
   test_dot();
   test_normalize();
   test_image_write();
-  test_render();
+  test_rand();
   return 0;
 }
