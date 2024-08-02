@@ -68,6 +68,7 @@ struct SphereCluster {
 
 struct RayCluster {
   Vec3_256 dir;
+  Vec3_256 orig;
 };
 
 struct HitRecords {

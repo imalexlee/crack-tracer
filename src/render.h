@@ -1,6 +1,5 @@
 #pragma once
 #include "camera.h"
-#include "constants.h"
 #include "globals.h"
 #include "materials.h"
 #include "math.h"
@@ -42,8 +41,7 @@ inline static void update_colors(Color_256* curr_colors, const Color_256* new_co
   curr_colors->b = _mm256_mul_ps(curr_colors->b, b);
 }
 
-inline static Color_256 ray_cluster_colors(RayCluster* rays, const Vec4* cam_origin,
-                                           uint8_t depth) {
+inline static Color_256 ray_cluster_colors(RayCluster* rays, uint8_t depth) {
   const __m256 zeros = _mm256_setzero_ps();
   // will be used to add a sky tint to rays that at some point bounce off into space.
   // if a ray never bounces away (within amount of bounces set by depth), the
@@ -58,9 +56,9 @@ inline static Color_256 ray_cluster_colors(RayCluster* rays, const Vec4* cam_ori
 
   for (int i = 0; i < depth; i++) {
 
-    find_sphere_hits(&hit_rec, rays, cam_origin, INFINITY);
+    find_sphere_hits(&hit_rec, rays, INFINITY);
 
-    __m256 new_hit_mask = _mm256_cmp_ps(hit_rec.t, zeros, CMPNLE);
+    __m256 new_hit_mask = _mm256_cmp_ps(hit_rec.t, zeros, global::cmpnle);
     // or a mask when a value is not a hit, at any point. if all are zero,
     // break
     __m256 new_no_hit_mask = _mm256_xor_ps(new_hit_mask, global::all_set);
@@ -82,32 +80,29 @@ inline static Color_256 ray_cluster_colors(RayCluster* rays, const Vec4* cam_ori
 //
 // subsequent render iterations will simply scale this by
 // row and column index to find where to take samples
-consteval RayCluster generate_init_directions() {
+consteval Vec3_256 generate_init_directions() {
 
   Vec3 top_left{
-      .x = CAM_ORIGIN[0] - VIEWPORT_WIDTH / 2,
-      .y = CAM_ORIGIN[1] + VIEWPORT_HEIGHT / 2,
-      .z = CAM_ORIGIN[2] - FOCAL_LEN,
+      .x = global::cam_origin[0] - global::viewport_width / 2,
+      .y = global::cam_origin[1] + global::viewport_height / 2,
+      .z = global::cam_origin[2] - global::focal_len,
   };
 
-  top_left.x += SAMPLE_DU;
-  top_left.y += SAMPLE_DV;
+  top_left.x += global::sample_du;
+  top_left.y += global::sample_dv;
 
   alignas(32) float x_arr[8];
   x_arr[0] = top_left.x;
   for (int i = 1; i < 8; i++) {
-    x_arr[i] = x_arr[i - 1] + SAMPLE_DU;
+    x_arr[i] = x_arr[i - 1] + global::sample_du;
   }
 
-  RayCluster init_dirs = {
-      .dir =
-          {
-              .x = {x_arr[0], x_arr[1], x_arr[2], x_arr[3], x_arr[4], x_arr[5], x_arr[6], x_arr[7]},
-              .y = {top_left.y, top_left.y, top_left.y, top_left.y, top_left.y, top_left.y,
-                    top_left.y, top_left.y},
-              .z = {top_left.z, top_left.z, top_left.z, top_left.z, top_left.z, top_left.z,
-                    top_left.z, top_left.z},
-          },
+  Vec3_256 init_dirs = {
+      .x = {x_arr[0], x_arr[1], x_arr[2], x_arr[3], x_arr[4], x_arr[5], x_arr[6], x_arr[7]},
+      .y = {top_left.y, top_left.y, top_left.y, top_left.y, top_left.y, top_left.y, top_left.y,
+            top_left.y},
+      .z = {top_left.z, top_left.z, top_left.z, top_left.z, top_left.z, top_left.z, top_left.z,
+            top_left.z},
 
   };
 
@@ -118,7 +113,8 @@ consteval RayCluster generate_init_directions() {
 // uses non temporal writes to avoid filling data cache
 inline static void write_out_color_buf(const Color* color_buf, CharColor* img_buf,
                                        uint32_t write_pos) {
-  __m256 cm = _mm256_broadcast_ss(&COLOR_MULTIPLIER);
+
+  __m256 cm = _mm256_broadcast_ss(&global::color_multiplier);
   __m256 colors_1_f32 = _mm256_mul_ps(_mm256_load_ps((float*)color_buf), cm);
   __m256 colors_2_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 8), cm);
   __m256 colors_3_f32 = _mm256_mul_ps(_mm256_load_ps((float*)(color_buf) + 16), cm);
@@ -183,7 +179,7 @@ inline static void write_out_color_buf(const Color* color_buf, CharColor* img_bu
 
   // SDL offsets our img pointer to a location that might not be aligned to 32 bytes.
   // Therefore we can't just stream from the registers to memory... :(
-  if constexpr (ACTIVE_RENDER_MODE == RENDER_MODE::REAL_TIME) {
+  if constexpr (global::active_render_mode == RenderMode::real_time) {
     alignas(32) CharColor char_buf[32];
     _mm256_store_si256(((__m256i*)char_buf), colors_1_u8);
     _mm256_store_si256(((__m256i*)char_buf) + 1, colors_2_u8);
@@ -207,18 +203,26 @@ inline static void write_out_color_buf(const Color* color_buf, CharColor* img_bu
 
 inline static void render(CharColor* img_buf, const Vec4 cam_origin, uint32_t pixel_count,
                           uint32_t pix_offset) {
-  constexpr RayCluster base_dirs = generate_init_directions();
+  constexpr Vec3_256 base_dirs = generate_init_directions();
+  RayCluster base_rays = {
+      .dir = base_dirs,
+      .orig = {.x = _mm256_broadcast_ss(&cam_origin.x),
+               .y = _mm256_broadcast_ss(&cam_origin.y),
+               .z = _mm256_broadcast_ss(&cam_origin.z)
+
+      },
+  };
 
   Color_256 sample_color;
-
   alignas(32) Color color_buf[32];
-  uint8_t color_buf_idx = 0;
+
   uint32_t write_pos = (pix_offset / 32) * 3;
-  uint16_t sample_group;
-  uint32_t row = pix_offset / IMG_WIDTH;
-  uint32_t col = pix_offset % IMG_WIDTH;
-  uint32_t end_row = (pix_offset + pixel_count - 1) / IMG_WIDTH;
-  uint32_t end_col = (pix_offset + pixel_count - 1) % IMG_WIDTH;
+  uint32_t row = pix_offset / global::img_width;
+  uint32_t col = pix_offset % global::img_width;
+  uint32_t end_row = (pix_offset + pixel_count - 1) / global::img_width;
+  uint32_t end_col = (pix_offset + pixel_count - 1) % global::img_width;
+  uint8_t color_buf_idx = 0;
+  uint8_t sample_group;
 
   for (; row <= end_row; row++) {
     while (col <= end_col) {
@@ -226,11 +230,11 @@ inline static void render(CharColor* img_buf, const Vec4 cam_origin, uint32_t pi
       sample_color.g = _mm256_setzero_ps();
       sample_color.b = _mm256_setzero_ps();
 
-      for (sample_group = 0; sample_group < SAMPLE_GROUP_NUM; sample_group++) {
+      for (sample_group = 0; sample_group < global::sample_group_num; sample_group++) {
 
-        RayCluster samples = base_dirs;
-        float x_scale = PIX_DU * col;
-        float y_scale = (PIX_DV * row) + (sample_group * SAMPLE_DV);
+        RayCluster samples = base_rays;
+        float x_scale = global::pix_du * col;
+        float y_scale = (global::pix_dv * row) + (sample_group * global::sample_dv);
 
         __m256 x_scale_vec = _mm256_broadcast_ss(&x_scale);
         __m256 y_scale_vec = _mm256_broadcast_ss(&y_scale);
@@ -238,7 +242,8 @@ inline static void render(CharColor* img_buf, const Vec4 cam_origin, uint32_t pi
         samples.dir.x = _mm256_add_ps(samples.dir.x, x_scale_vec);
         samples.dir.y = _mm256_add_ps(samples.dir.y, y_scale_vec);
 
-        Color_256 new_colors = ray_cluster_colors(&samples, &cam_origin, 10);
+        Color_256 new_colors = ray_cluster_colors(&samples, 10);
+
         sample_color.r = _mm256_add_ps(sample_color.r, new_colors.r);
         sample_color.g = _mm256_add_ps(sample_color.g, new_colors.g);
         sample_color.b = _mm256_add_ps(sample_color.b, new_colors.b);
@@ -279,19 +284,20 @@ inline static void render(CharColor* img_buf, const Vec4 cam_origin, uint32_t pi
 using namespace std::chrono;
 
 inline static void render_png() {
-  CharColor* img_data = (CharColor*)aligned_alloc(32, IMG_WIDTH * IMG_HEIGHT * sizeof(CharColor));
-  std::array<std::future<void>, THREAD_COUNT> futures;
-  constexpr uint32_t chunk_size = IMG_WIDTH * (IMG_HEIGHT / THREAD_COUNT);
+  CharColor* img_data =
+      (CharColor*)aligned_alloc(32, global::img_width * global::img_height * sizeof(CharColor));
+  std::array<std::future<void>, global::thread_count> futures;
+  constexpr uint32_t chunk_size = global::img_width * (global::img_height / global::thread_count);
   Camera cam;
 
   auto start_time = system_clock::now();
 
-  for (size_t idx = 0; idx < THREAD_COUNT; idx++) {
+  for (size_t idx = 0; idx < global::thread_count; idx++) {
     futures[idx] =
         std::async(std::launch::async, render, img_data, cam.origin, chunk_size, idx * chunk_size);
   }
 
-  for (size_t idx = 0; idx < THREAD_COUNT; idx++) {
+  for (size_t idx = 0; idx < global::thread_count; idx++) {
     futures[idx].get();
   }
 
@@ -299,13 +305,15 @@ inline static void render_png() {
   auto dur = duration<float>(end_time - start_time);
   float milli = duration_cast<microseconds>(dur).count() / 1000.f;
   printf("render time (ms): %f\n", milli);
-  stbi_write_png("out.png", IMG_WIDTH, IMG_HEIGHT, 3, img_data, IMG_WIDTH * sizeof(CharColor));
+  stbi_write_png("out.png", global::img_width, global::img_height, 3, img_data,
+                 global::img_width * sizeof(CharColor));
 }
 
 inline static void render_realtime() {
-  CharColor* img_data = (CharColor*)aligned_alloc(32, IMG_WIDTH * IMG_HEIGHT * sizeof(CharColor));
-  std::array<std::future<void>, THREAD_COUNT> futures;
-  constexpr uint32_t chunk_size = IMG_WIDTH * (IMG_HEIGHT / THREAD_COUNT);
+  CharColor* img_data =
+      (CharColor*)aligned_alloc(32, global::img_width * global::img_height * sizeof(CharColor));
+  std::array<std::future<void>, global::thread_count> futures;
+  constexpr uint32_t chunk_size = global::img_width * (global::img_height / global::thread_count);
   Camera cam;
 
   SDL_Window* win = NULL;
@@ -318,13 +326,14 @@ inline static void render_realtime() {
     exit(EXIT_FAILURE);
   }
 
-  win = SDL_CreateWindow("Crack Tracer", 100, 100, IMG_WIDTH, IMG_HEIGHT, 0);
+  win = SDL_CreateWindow("Crack Tracer", 100, 100, global::img_width, global::img_height, 0);
   renderer = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
 
-  SDL_Texture* buffer = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24,
-                                          SDL_TEXTUREACCESS_STREAMING, IMG_WIDTH, IMG_HEIGHT);
+  SDL_Texture* buffer =
+      SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING,
+                        global::img_width, global::img_height);
 
-  int pitch = IMG_WIDTH * sizeof(CharColor);
+  int pitch = global::img_width * sizeof(CharColor);
 
   while (true) {
     SDL_Event e;
@@ -339,12 +348,12 @@ inline static void render_realtime() {
 
     SDL_LockTexture(buffer, NULL, (void**)(&img_data), &pitch);
 
-    for (size_t idx = 0; idx < THREAD_COUNT; idx++) {
+    for (size_t idx = 0; idx < global::thread_count; idx++) {
       futures[idx] = std::async(std::launch::async, render, img_data, cam.origin, chunk_size,
                                 idx * chunk_size);
     }
 
-    for (size_t idx = 0; idx < THREAD_COUNT; idx++) {
+    for (size_t idx = 0; idx < global::thread_count; idx++) {
       futures[idx].get();
     }
 

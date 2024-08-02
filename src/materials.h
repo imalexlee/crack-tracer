@@ -19,8 +19,11 @@ inline static void scatter_metallic(RayCluster* rays, const HitRecords* hit_rec)
 };
 
 inline static void scatter_lambertian(RayCluster* rays, const HitRecords* hit_rec) {
-  // TODO
-  scatter_metallic(rays, hit_rec);
+  Vec3_256 rand_vec = random_unit_vec();
+
+  rays->dir.x = _mm256_add_ps(rand_vec.x, hit_rec->norm.x);
+  rays->dir.y = _mm256_add_ps(rand_vec.y, hit_rec->norm.y);
+  rays->dir.z = _mm256_add_ps(rand_vec.z, hit_rec->norm.z);
 }
 
 inline static void scatter(RayCluster* rays, const HitRecords* hit_rec) {
@@ -32,22 +35,32 @@ inline static void scatter(RayCluster* rays, const HitRecords* hit_rec) {
 
   if (!_mm256_testz_si256(metallic_loc, metallic_loc)) {
     RayCluster metallic_rays = {
-        .dir = {.x = rays->dir.x, .y = rays->dir.y, .z = rays->dir.z},
+        .dir = rays->dir,
+        .orig = hit_rec->orig,
     };
     scatter_metallic(&metallic_rays, hit_rec);
 
     rays->dir.x = _mm256_blendv_ps(rays->dir.x, metallic_rays.dir.x, (__m256)metallic_loc);
     rays->dir.y = _mm256_blendv_ps(rays->dir.y, metallic_rays.dir.y, (__m256)metallic_loc);
     rays->dir.z = _mm256_blendv_ps(rays->dir.z, metallic_rays.dir.z, (__m256)metallic_loc);
+
+    rays->orig.x = _mm256_blendv_ps(rays->orig.x, metallic_rays.orig.x, (__m256)metallic_loc);
+    rays->orig.y = _mm256_blendv_ps(rays->orig.y, metallic_rays.orig.y, (__m256)metallic_loc);
+    rays->orig.z = _mm256_blendv_ps(rays->orig.z, metallic_rays.orig.z, (__m256)metallic_loc);
   }
   if (!_mm256_testz_si256(lambertian_loc, lambertian_loc)) {
     RayCluster lambertian_rays = {
-        .dir = {.x = rays->dir.x, .y = rays->dir.y, .z = rays->dir.z},
+        .dir = rays->dir,
+        .orig = hit_rec->orig,
     };
     scatter_lambertian(&lambertian_rays, hit_rec);
 
     rays->dir.x = _mm256_blendv_ps(rays->dir.x, lambertian_rays.dir.x, (__m256)lambertian_loc);
     rays->dir.y = _mm256_blendv_ps(rays->dir.y, lambertian_rays.dir.y, (__m256)lambertian_loc);
     rays->dir.z = _mm256_blendv_ps(rays->dir.z, lambertian_rays.dir.z, (__m256)lambertian_loc);
+
+    rays->orig.x = _mm256_blendv_ps(rays->orig.x, lambertian_rays.orig.x, (__m256)lambertian_loc);
+    rays->orig.y = _mm256_blendv_ps(rays->orig.y, lambertian_rays.orig.y, (__m256)lambertian_loc);
+    rays->orig.z = _mm256_blendv_ps(rays->orig.z, lambertian_rays.orig.z, (__m256)lambertian_loc);
   }
 }
