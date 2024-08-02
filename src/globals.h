@@ -40,6 +40,4 @@ namespace global {
   constexpr __m256 t_min_vec = {
       0.001f, 0.001f, 0.001f, 0.001f, 0.001f, 0.001f, 0.001f, 0.001f,
   };
-  constexpr float rcp_rand_max = 1.f / RAND_MAX;
-  thread_local static int rseed = 0;
 } // namespace global

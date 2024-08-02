@@ -42,46 +42,6 @@ inline static void normalize(Vec3_256* vec) {
   vec->z = _mm256_mul_ps(vec->z, recip_len);
 }
 
-[[nodiscard]] inline static int lcg_rand() {
-  return global::rseed = (global::rseed * 11035152453 + 12345) & RAND_MAX;
-}
-
-[[nodiscard]] inline static float rand_in_range(float min, float max) {
-  float scale = lcg_rand() / (float)RAND_MAX;
-  float f = min + scale * (max - min);
-  return f;
-}
-
-// finds random vectors in unit cube
-[[nodiscard]] inline static Vec3_256 rand_vec_in_cube() {
-  float min = -1.0;
-  float max = 1.0;
-
-  alignas(32) float x_arr[8];
-  alignas(32) float y_arr[8];
-  alignas(32) float z_arr[8];
-
-  for (int i = 0; i < 8; i++) {
-    x_arr[i] = rand_in_range(min, max);
-    y_arr[i] = rand_in_range(min, max);
-    z_arr[i] = rand_in_range(min, max);
-  }
-
-  Vec3_256 rand_vec = {
-      .x = _mm256_load_ps(x_arr),
-      .y = _mm256_load_ps(y_arr),
-      .z = _mm256_load_ps(z_arr),
-  };
-
-  return rand_vec;
-}
-
-[[nodiscard]] inline static Vec3_256 random_unit_vec() {
-  Vec3_256 rand_vec = rand_vec_in_cube();
-  normalize(&rand_vec);
-  return rand_vec;
-};
-
 inline static uint32_t f_to_i(float f_val) {
   f_val += 1 << 23;
   return ((uint32_t)f_val) & 0x007FFFFF;
