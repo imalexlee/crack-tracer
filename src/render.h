@@ -20,9 +20,9 @@ constexpr Color_256 sky = {
 };
 
 constexpr Color_256 night = {
-    .r = {0, 0, 0, 0, 0, 0, 0, 0},
-    .g = {0, 0, 0, 0, 0, 0, 0, 0},
-    .b = {0, 0, 0, 0, 0, 0, 0, 0},
+    .r = {0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02},
+    .g = {0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08},
+    .b = {0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35},
 };
 
 inline static void update_colors(Color_256* curr_colors, const Color_256* new_colors,
@@ -259,8 +259,10 @@ inline static void render(CharColor* img_buf, const Vec4 cam_origin, uint32_t pi
 using namespace std::chrono;
 
 inline static void render_png() {
+
   CharColor* img_data =
       (CharColor*)aligned_alloc(32, global::img_width * global::img_height * sizeof(CharColor));
+  init_spheres();
   std::array<std::future<void>, global::thread_count> futures;
   constexpr uint32_t chunk_size = global::img_width * (global::img_height / global::thread_count);
   Camera cam;
@@ -287,6 +289,7 @@ inline static void render_png() {
 inline static void render_realtime() {
   CharColor* img_data =
       (CharColor*)aligned_alloc(32, global::img_width * global::img_height * sizeof(CharColor));
+  init_spheres();
   std::array<std::future<void>, global::thread_count> futures;
   constexpr uint32_t chunk_size = global::img_width * (global::img_height / global::thread_count);
   Camera cam;

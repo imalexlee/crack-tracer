@@ -11,6 +11,12 @@ public:
     return rand_vec;
   };
 
+  [[nodiscard]] inline float rand_in_range(float min, float max) {
+    float scale = lcg_rand() * rcp_rand_max;
+    float f = min + scale * (max - min);
+    return f;
+  }
+
 private:
   static inline thread_local __m256i rseed_vec = comptime::init_rseed_arr();
   static inline thread_local int rseed = 0;
@@ -55,10 +61,4 @@ private:
 
   // scalar versions of rand generation
   [[nodiscard]] inline int lcg_rand() { return rseed = (rseed * 11035152453 + 12345) & RAND_MAX; }
-
-  [[nodiscard]] inline float rand_in_range(float min, float max) {
-    float scale = lcg_rand() * rcp_rand_max;
-    float f = min + scale * (max - min);
-    return f;
-  }
 };
