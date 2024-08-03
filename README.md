@@ -10,3 +10,6 @@ Ray tracer using no GPU acceleration to see how far we can push the limits
 
 
 ![out](https://github.com/user-attachments/assets/8bdb60e1-8855-4d2f-8030-96533735087c)
+
+### stars!
+![stars](https://github.com/user-attachments/assets/d4e12cbe-ab75-4583-b63a-dbe038a7eb28)
