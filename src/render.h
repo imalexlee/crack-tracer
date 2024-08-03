@@ -7,6 +7,7 @@
 #include "sphere.h"
 #include "types.h"
 #include <SDL2/SDL.h>
+#include <array>
 #include <chrono>
 #include <future>
 #include <immintrin.h>
@@ -259,6 +260,8 @@ inline static void render(CharColor* img_buf, const Vec4 cam_origin, uint32_t pi
 using namespace std::chrono;
 
 inline static void render_png() {
+  static_assert(global::img_height % global::thread_count == 0,
+                "Thread count must divide rows equally");
 
   CharColor* img_data =
       (CharColor*)aligned_alloc(32, global::img_width * global::img_height * sizeof(CharColor));
@@ -287,10 +290,12 @@ inline static void render_png() {
 }
 
 inline static void render_realtime() {
+  static_assert(global::img_height % global::thread_count == 0,
+                "Thread count must divide rows equally");
   CharColor* img_data =
       (CharColor*)aligned_alloc(32, global::img_width * global::img_height * sizeof(CharColor));
   init_spheres();
-  std::array<std::future<void>, global::thread_count> futures;
+  std::array<std::future<void>, global::thread_count> futures{};
   constexpr uint32_t chunk_size = global::img_width * (global::img_height / global::thread_count);
   Camera cam;
 
