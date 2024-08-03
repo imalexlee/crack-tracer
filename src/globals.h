@@ -32,7 +32,7 @@ namespace global {
   constexpr float sample_dv = pix_dv / (sample_group_num + 1);
   constexpr float focal_len = 1.0;
   constexpr float color_multiplier = 255.f / (sample_group_num * 8);
-  constexpr uint8_t thread_count = 50;
+  constexpr uint8_t thread_count = 54;
   constexpr RenderMode active_render_mode = RenderMode::png;
   alignas(32) constexpr float cam_origin[4] = {0.f, 0.f, 0.0f, 0.f};
   const __m256 all_set = _mm256_cmp_ps(_mm256_setzero_ps(), _mm256_setzero_ps(), cmpeq);
