@@ -1,8 +1,9 @@
 #pragma once
 #include "globals.h"
+#include "rand.h"
 #include "types.h"
-#include <array>
 #include <immintrin.h>
+#include <vector>
 
 constexpr Color silver = {
     .r = 0.66f,
@@ -35,9 +36,9 @@ constexpr Color green = {
 };
 
 constexpr Color moon = {
-    .r = 2.f,
-    .g = 2.f,
-    .b = 2.f,
+    .r = 100.f,
+    .g = 100.f,
+    .b = 100.f,
 };
 
 constexpr Material silver_metallic = {.atten = silver, .type = MatType::metallic};
@@ -50,15 +51,29 @@ constexpr Material silver_lambertian = {.atten = silver, .type = MatType::lamber
 constexpr Material red_lambertian = {.atten = red, .type = MatType::lambertian};
 constexpr Material gold_lambertian = {.atten = gold, .type = MatType::lambertian};
 
-constexpr Material moon_emissive = {.atten = moon, .type = MatType::emissive};
+constexpr Material star_lambertian = {.atten = moon, .type = MatType::lambertian};
 
-constexpr auto spheres = std::to_array<Sphere>({
-    {.center = {.x = 0.f, .y = 0.f, .z = -1.2f}, .mat = copper_metallic, .r = 0.5f},
-    {.center = {.x = -1.f, .y = 0.f, .z = -1.f}, .mat = red_lambertian, .r = 0.4f},
-    {.center = {.x = 1.f, .y = 0.f, .z = -1.f}, .mat = gold_metallic, .r = 0.4f},
-    {.center = {.x = 0.7f, .y = 2.f, .z = -1.4f}, .mat = moon_emissive, .r = 0.4f},
-    {.center = {.x = 0.f, .y = -100.5f, .z = -1.f}, .mat = silver_metallic, .r = 100.f},
-});
+static std::vector<Sphere> spheres;
+
+inline static void init_spheres() {
+  spheres.reserve(4);
+  spheres = {
+      {.center = {.x = 0.f, .y = 0.f, .z = -1.2f}, .mat = copper_metallic, .r = 0.5f},
+      {.center = {.x = -1.f, .y = 0.f, .z = -1.f}, .mat = red_lambertian, .r = 0.4f},
+      {.center = {.x = 1.f, .y = 0.f, .z = -1.f}, .mat = gold_metallic, .r = 0.4f},
+      {.center = {.x = 0.f, .y = -100.5f, .z = -1.f}, .mat = silver_metallic, .r = 100.f},
+  };
+  //  LCGRand lcg_rand;
+  //  for (size_t i = 4; i < spheres.capacity(); i++) {
+  //    Sphere star;
+  //    star.r = 0.01;
+  //    star.mat = star_lambertian;
+  //    star.center.x = lcg_rand.rand_in_range(-10.f, 10.f);
+  //    star.center.y = lcg_rand.rand_in_range(1.f, 6.f);
+  //    star.center.z = lcg_rand.rand_in_range(-10.f, 7.f);
+  //    spheres.push_back(star);
+  //  }
+}
 
 // Returns hit t values or 0 depending on if this ray hit this sphere or not
 [[nodiscard]] inline static __m256 sphere_hit(const RayCluster* rays, const Sphere* sphere,

@@ -10,7 +10,7 @@ enum RenderMode {
 
 namespace global {
   constexpr uint8_t sphere_num = 3;
-  constexpr uint8_t sample_group_num = 10;
+  constexpr uint8_t sample_group_num = 4;
   constexpr uint8_t cmpeq = 0;
   constexpr uint8_t cmplt = 1;
   constexpr uint8_t cmpneq = 4;
