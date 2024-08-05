@@ -55,7 +55,10 @@ inline static Color_256 ray_cluster_colors(RayCluster* rays, uint8_t depth) {
   // if a ray never bounces away (within amount of bounces set by depth), the
   // hit_mask will be all set (packed floats) and the sky tint will not affect its final color
   __m256 no_hit_mask = zeros;
+
   HitRecords hit_rec;
+  hit_rec.front_face = zeros;
+
   Color_256 colors{
       .r = global::white,
       .g = global::white,

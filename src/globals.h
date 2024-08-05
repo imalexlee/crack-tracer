@@ -13,6 +13,7 @@ namespace global {
   constexpr uint8_t sample_group_num = 4;
   constexpr uint8_t cmpeq = 0;
   constexpr uint8_t cmplt = 1;
+  constexpr uint8_t cmple = 2;
   constexpr uint8_t cmpneq = 4;
   constexpr uint8_t cmpnlt = 5;
   constexpr uint8_t cmpnle = 6;
@@ -34,6 +35,11 @@ namespace global {
   constexpr float color_multiplier = 255.f / (sample_group_num * 8);
   constexpr uint8_t thread_count = 54;
   constexpr RenderMode active_render_mode = RenderMode::png;
+  // index of refraction
+  constexpr float ir = 1.5;
+  constexpr __m256 ir_vec = {ir, ir, ir, ir, ir, ir, ir, ir};
+  constexpr float rcp_ir = 1 / ir;
+  constexpr __m256 rcp_ir_vec = {rcp_ir, rcp_ir, rcp_ir, rcp_ir, rcp_ir, rcp_ir, rcp_ir, rcp_ir};
   alignas(32) constexpr float cam_origin[4] = {0.f, 0.f, 0.0f, 0.f};
   const __m256 all_set = _mm256_cmp_ps(_mm256_setzero_ps(), _mm256_setzero_ps(), cmpeq);
   constexpr __m256 white = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f};
