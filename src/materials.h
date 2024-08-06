@@ -7,6 +7,7 @@
 #include <immintrin.h>
 
 constexpr Color silver = {.r = 0.66f, .g = 0.66f, .b = 0.66f};
+constexpr Color grey = {.r = 0.5f, .g = 0.5f, .b = 0.5f};
 constexpr Color white = {.r = 1.f, .g = 1.f, .b = 1.f};
 constexpr Color red = {.r = 0.90f, .g = 0.20f, .b = 0.20f};
 constexpr Color gold = {.r = 0.90f, .g = 0.75f, .b = 0.54f};
@@ -24,6 +25,7 @@ constexpr Material silver_lambertian = {.atten = silver, .type = MatType::lamber
 constexpr Material red_lambertian = {.atten = red, .type = MatType::lambertian};
 constexpr Material gold_lambertian = {.atten = gold, .type = MatType::lambertian};
 constexpr Material star_lambertian = {.atten = moon, .type = MatType::lambertian};
+constexpr Material grey_lambertian = {.atten = grey, .type = MatType::lambertian};
 
 constexpr Material glass = {.atten = white, .type = MatType::dielectric};
 
@@ -103,7 +105,12 @@ inline static void scatter_dielectric(RayCluster* rays, const HitRecords* hit_re
   __m256 reflection_loc = _mm256_xor_ps(refraction_loc, global::all_set);
 
   if (!_mm256_testz_ps(refraction_loc, refraction_loc)) {
-    // TODO: implement refract
+    Vec3_256 refract_dir = rays->dir;
+    refract(&refract_dir, &hit_rec->norm, refraction_ratio);
+
+    rays->dir.x = _mm256_blendv_ps(rays->dir.x, refract_dir.x, refraction_loc);
+    rays->dir.y = _mm256_blendv_ps(rays->dir.y, refract_dir.y, refraction_loc);
+    rays->dir.z = _mm256_blendv_ps(rays->dir.z, refract_dir.z, refraction_loc);
   }
   if (!_mm256_testz_ps(reflection_loc, reflection_loc)) {
     Vec3_256 reflect_dir = rays->dir;

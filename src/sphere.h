@@ -1,19 +1,56 @@
 #pragma once
-#include "globals.h"
 #include "materials.h"
 #include "math.h"
+#include "rand.h"
 #include "types.h"
-#include <array>
 #include <immintrin.h>
+#include <vector>
 
-static std::array<Sphere, 4> spheres;
+static std::vector<Sphere> spheres;
 inline static void init_spheres() {
+  spheres.reserve(300);
   spheres = {
-      {{.center = {.x = 0.f, .y = 0.f, .z = -1.2f}, .mat = copper_metallic, .r = 0.5f},
-       {.center = {.x = -1.f, .y = 0.f, .z = -1.f}, .mat = glass, .r = 0.4f},
-       {.center = {.x = 1.f, .y = 0.f, .z = -1.f}, .mat = gold_metallic, .r = 0.4f},
-       {.center = {.x = 0.f, .y = -100.5f, .z = -1.f}, .mat = silver_metallic, .r = 100.f}},
+      {{.center = {.x = -1.f, .y = 1.f, .z = -2.5f}, .mat = red_lambertian, .r = 1.f},
+       {.center = {.x = 0.f, .y = 1.f, .z = 0.f}, .mat = glass, .r = 1.f},
+       {.center = {.x = 1.f, .y = 1.f, .z = 2.5f}, .mat = copper_metallic, .r = 1.f},
+       {.center = {.x = 0.f, .y = -1000.f, .z = 0.f}, .mat = grey_lambertian, .r = 1000.f}},
   };
+  LCGRand lcg_rand;
+  for (int a = -11; a < 11; a++) {
+    for (int b = -11; b < 11; b++) {
+      float choose_mat = lcg_rand.rand_in_range(0, 1);
+      Vec3 center = {
+          .x = a + lcg_rand.rand_in_range(0, 1),
+          .y = 0.2f,
+          .z = b + 0.9f * lcg_rand.rand_in_range(0, 1),
+      };
+      if (choose_mat < 0.3) {
+        // diffuse
+        Color albedo = {
+            .r = lcg_rand.rand_in_range(0, 1),
+            .g = lcg_rand.rand_in_range(0, 1),
+            .b = lcg_rand.rand_in_range(0, 1),
+        };
+        Material new_mat = {.atten = albedo, .type = MatType::lambertian};
+        spheres.push_back(Sphere{.center = center, .mat = new_mat, .r = 0.2});
+      } else if (choose_mat < 0.7) {
+        // metal
+        Color albedo = {
+            .r = lcg_rand.rand_in_range(0.5, 1),
+            .g = lcg_rand.rand_in_range(0.5, 1),
+            .b = lcg_rand.rand_in_range(0.5, 1),
+        };
+        Material new_mat = {.atten = albedo, .type = MatType::metallic};
+        spheres.push_back(Sphere{.center = center, .mat = new_mat, .r = 0.2});
+      } else {
+        // glass
+        Material new_mat = {.atten = white, .type = MatType::dielectric};
+        spheres.push_back(Sphere{.center = center, .mat = new_mat, .r = 0.2});
+      }
+    }
+  }
+
+  spheres.shrink_to_fit();
 }
 
 // Returns hit t values or 0 depending on if this ray hit this sphere or not

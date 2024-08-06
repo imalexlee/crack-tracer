@@ -26,6 +26,12 @@ constexpr Color_256 night = {
     .b = {0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35},
 };
 
+constexpr Color_256 white_256 = {
+    .r = global::white,
+    .g = global::white,
+    .b = global::white,
+};
+
 inline static void update_colors(Color_256* curr_colors, const Color_256* new_colors,
                                  __m256 update_mask) {
 
@@ -76,7 +82,7 @@ inline static Color_256 ray_cluster_colors(RayCluster* rays, uint8_t depth) {
 
     no_hit_mask = _mm256_or_ps(no_hit_mask, new_no_hit_mask);
     if (_mm256_testz_ps(new_hit_mask, new_hit_mask)) {
-      update_colors(&colors, &sky, no_hit_mask);
+      update_colors(&colors, &white_256, no_hit_mask);
       break;
     }
 
