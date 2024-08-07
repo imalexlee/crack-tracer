@@ -42,7 +42,7 @@ struct Color_256 {
 enum MatType {
   metallic,
   lambertian,
-  emissive,
+  dielectric,
 };
 
 struct Material_256 {
@@ -76,5 +76,6 @@ struct HitRecords {
   Vec3_256 orig;
   Vec3_256 norm;
   Material_256 mat;
+  __m256 front_face;
   __m256 t;
 };

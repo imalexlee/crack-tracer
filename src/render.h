@@ -26,6 +26,12 @@ constexpr Color_256 night = {
     .b = {0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35},
 };
 
+constexpr Color_256 white_256 = {
+    .r = global::white,
+    .g = global::white,
+    .b = global::white,
+};
+
 inline static void update_colors(Color_256* curr_colors, const Color_256* new_colors,
                                  __m256 update_mask) {
 
@@ -55,7 +61,10 @@ inline static Color_256 ray_cluster_colors(RayCluster* rays, uint8_t depth) {
   // if a ray never bounces away (within amount of bounces set by depth), the
   // hit_mask will be all set (packed floats) and the sky tint will not affect its final color
   __m256 no_hit_mask = zeros;
+
   HitRecords hit_rec;
+  hit_rec.front_face = zeros;
+
   Color_256 colors{
       .r = global::white,
       .g = global::white,
@@ -73,7 +82,7 @@ inline static Color_256 ray_cluster_colors(RayCluster* rays, uint8_t depth) {
 
     no_hit_mask = _mm256_or_ps(no_hit_mask, new_no_hit_mask);
     if (_mm256_testz_ps(new_hit_mask, new_hit_mask)) {
-      update_colors(&colors, &sky, no_hit_mask);
+      update_colors(&colors, &white_256, no_hit_mask);
       break;
     }
 

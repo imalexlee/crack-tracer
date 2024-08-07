@@ -1,78 +1,56 @@
 #pragma once
-#include "globals.h"
+#include "materials.h"
+#include "math.h"
 #include "rand.h"
 #include "types.h"
 #include <immintrin.h>
 #include <vector>
 
-constexpr Color silver = {
-    .r = 0.66f,
-    .g = 0.66f,
-    .b = 0.66f,
-};
-
-constexpr Color red = {
-    .r = 0.90f,
-    .g = 0.20f,
-    .b = 0.20f,
-};
-
-constexpr Color gold = {
-    .r = 0.90f,
-    .g = 0.75f,
-    .b = 0.54f,
-};
-
-constexpr Color copper = {
-    .r = 0.59f,
-    .g = 0.34f,
-    .b = 0.29f,
-};
-
-constexpr Color green = {
-    .r = 0.f,
-    .g = 1.f,
-    .b = 0.f,
-};
-
-constexpr Color moon = {
-    .r = 100.f,
-    .g = 100.f,
-    .b = 100.f,
-};
-
-constexpr Material silver_metallic = {.atten = silver, .type = MatType::metallic};
-constexpr Material red_metallic = {.atten = red, .type = MatType::metallic};
-constexpr Material gold_metallic = {.atten = gold, .type = MatType::metallic};
-constexpr Material copper_metallic = {.atten = copper, .type = MatType::metallic};
-constexpr Material green_metallic = {.atten = green, .type = MatType::metallic};
-
-constexpr Material silver_lambertian = {.atten = silver, .type = MatType::lambertian};
-constexpr Material red_lambertian = {.atten = red, .type = MatType::lambertian};
-constexpr Material gold_lambertian = {.atten = gold, .type = MatType::lambertian};
-
-constexpr Material star_lambertian = {.atten = moon, .type = MatType::lambertian};
-
 static std::vector<Sphere> spheres;
-
 inline static void init_spheres() {
-  spheres.reserve(4);
+  spheres.reserve(300);
   spheres = {
-      {.center = {.x = 0.f, .y = 0.f, .z = -1.2f}, .mat = copper_metallic, .r = 0.5f},
-      {.center = {.x = -1.f, .y = 0.f, .z = -1.f}, .mat = red_lambertian, .r = 0.4f},
-      {.center = {.x = 1.f, .y = 0.f, .z = -1.f}, .mat = gold_metallic, .r = 0.4f},
-      {.center = {.x = 0.f, .y = -100.5f, .z = -1.f}, .mat = silver_metallic, .r = 100.f},
+      {{.center = {.x = -1.f, .y = 1.f, .z = -2.5f}, .mat = red_lambertian, .r = 1.f},
+       {.center = {.x = 0.f, .y = 1.f, .z = 0.f}, .mat = glass, .r = 1.f},
+       {.center = {.x = 1.f, .y = 1.f, .z = 2.5f}, .mat = copper_metallic, .r = 1.f},
+       {.center = {.x = 0.f, .y = -1000.f, .z = 0.f}, .mat = grey_lambertian, .r = 1000.f}},
   };
-  //  LCGRand lcg_rand;
-  //  for (size_t i = 4; i < spheres.capacity(); i++) {
-  //    Sphere star;
-  //    star.r = 0.01;
-  //    star.mat = star_lambertian;
-  //    star.center.x = lcg_rand.rand_in_range(-10.f, 10.f);
-  //    star.center.y = lcg_rand.rand_in_range(1.f, 6.f);
-  //    star.center.z = lcg_rand.rand_in_range(-10.f, 7.f);
-  //    spheres.push_back(star);
-  //  }
+  LCGRand lcg_rand;
+  for (int a = -11; a < 11; a++) {
+    for (int b = -11; b < 11; b++) {
+      float choose_mat = lcg_rand.rand_in_range(0, 1);
+      Vec3 center = {
+          .x = a + lcg_rand.rand_in_range(0, 1),
+          .y = 0.2f,
+          .z = b + 0.9f * lcg_rand.rand_in_range(0, 1),
+      };
+      if (choose_mat < 0.3) {
+        // diffuse
+        Color albedo = {
+            .r = lcg_rand.rand_in_range(0, 1),
+            .g = lcg_rand.rand_in_range(0, 1),
+            .b = lcg_rand.rand_in_range(0, 1),
+        };
+        Material new_mat = {.atten = albedo, .type = MatType::lambertian};
+        spheres.push_back(Sphere{.center = center, .mat = new_mat, .r = 0.2});
+      } else if (choose_mat < 0.7) {
+        // metal
+        Color albedo = {
+            .r = lcg_rand.rand_in_range(0.5, 1),
+            .g = lcg_rand.rand_in_range(0.5, 1),
+            .b = lcg_rand.rand_in_range(0.5, 1),
+        };
+        Material new_mat = {.atten = albedo, .type = MatType::metallic};
+        spheres.push_back(Sphere{.center = center, .mat = new_mat, .r = 0.2});
+      } else {
+        // glass
+        Material new_mat = {.atten = white, .type = MatType::dielectric};
+        spheres.push_back(Sphere{.center = center, .mat = new_mat, .r = 0.2});
+      }
+    }
+  }
+
+  spheres.shrink_to_fit();
 }
 
 // Returns hit t values or 0 depending on if this ray hit this sphere or not
@@ -136,6 +114,31 @@ inline static void init_spheres() {
   return root;
 }
 
+inline static void set_face_normal(const RayCluster* rays, HitRecords* hit_rec,
+                                   Vec3_256* outward_norm) {
+
+  hit_rec->norm = *outward_norm;
+
+  __m256 ray_norm_dot = dot(&rays->dir, outward_norm);
+  hit_rec->front_face = _mm256_cmp_ps(ray_norm_dot, _mm256_setzero_ps(), global::cmplt);
+  __m256 back_face = _mm256_xor_ps(hit_rec->front_face, global::all_set);
+  if (_mm256_testz_ps(back_face, back_face)) {
+    return;
+  }
+
+  __m256 invert = _mm256_sub_ps(_mm256_setzero_ps(), global::white);
+
+  Vec3_256 inward_norm = {
+      .x = _mm256_mul_ps(outward_norm->x, invert),
+      .y = _mm256_mul_ps(outward_norm->y, invert),
+      .z = _mm256_mul_ps(outward_norm->z, invert),
+  };
+
+  hit_rec->norm.x = _mm256_blendv_ps(hit_rec->norm.x, inward_norm.x, back_face);
+  hit_rec->norm.y = _mm256_blendv_ps(hit_rec->norm.y, inward_norm.y, back_face);
+  hit_rec->norm.z = _mm256_blendv_ps(hit_rec->norm.z, inward_norm.z, back_face);
+}
+
 inline static void create_hit_record(HitRecords* hit_rec, const RayCluster* rays,
                                      SphereCluster* sphere_cluster, __m256 t_vals) {
   hit_rec->t = t_vals;
@@ -153,16 +156,22 @@ inline static void create_hit_record(HitRecords* hit_rec, const RayCluster* rays
   hit_rec->orig.y = _mm256_add_ps(ray_orig_y, dir_yt);
   hit_rec->orig.z = _mm256_add_ps(ray_orig_z, dir_zt);
 
-  __m256 norm_x = _mm256_sub_ps(hit_rec->orig.x, sphere_cluster->center.x);
-  __m256 norm_y = _mm256_sub_ps(hit_rec->orig.y, sphere_cluster->center.y);
-  __m256 norm_z = _mm256_sub_ps(hit_rec->orig.z, sphere_cluster->center.z);
+  Vec3_256 norm = {
+      .x = _mm256_sub_ps(hit_rec->orig.x, sphere_cluster->center.x),
+      .y = _mm256_sub_ps(hit_rec->orig.y, sphere_cluster->center.y),
+      .z = _mm256_sub_ps(hit_rec->orig.z, sphere_cluster->center.z),
+  };
 
   __m256 recip_radius = _mm256_rcp_ps(sphere_cluster->r);
 
   // normalize
-  hit_rec->norm.x = _mm256_mul_ps(norm_x, recip_radius);
-  hit_rec->norm.y = _mm256_mul_ps(norm_y, recip_radius);
-  hit_rec->norm.z = _mm256_mul_ps(norm_z, recip_radius);
+  norm.x = _mm256_mul_ps(norm.x, recip_radius);
+  norm.y = _mm256_mul_ps(norm.y, recip_radius);
+  norm.z = _mm256_mul_ps(norm.z, recip_radius);
+
+  // hit_rec->norm = norm;
+
+  set_face_normal(rays, hit_rec, &norm);
 }
 
 // updates a sphere cluster with a sphere given a mask of where to insert the new sphere's values
