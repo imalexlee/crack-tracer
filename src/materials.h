@@ -92,8 +92,7 @@ inline static void scatter_dielectric(RayCluster* rays, const HitRecords* hit_re
 
   __m256 sin_theta = _mm256_mul_ps(cos_theta, cos_theta);
   sin_theta = _mm256_sub_ps(global::white, sin_theta);
-  __m256 rcp_sqrt_sin_theta = _mm256_rsqrt_ps(sin_theta);
-  sin_theta = _mm256_mul_ps(sin_theta, rcp_sqrt_sin_theta);
+  sin_theta = _mm256_sqrt_ps(sin_theta);
 
   __m256 can_refract = _mm256_mul_ps(refraction_ratio, sin_theta);
   can_refract = _mm256_cmp_ps(can_refract, global::white, global::cmple);
