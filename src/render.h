@@ -9,6 +9,7 @@
 #include <SDL2/SDL.h>
 #include <array>
 #include <chrono>
+#include <cstdio>
 #include <future>
 #include <immintrin.h>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -24,12 +25,6 @@ constexpr Color_256 night = {
     .r = {0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02},
     .g = {0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08},
     .b = {0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35},
-};
-
-constexpr Color_256 white_256 = {
-    .r = global::white,
-    .g = global::white,
-    .b = global::white,
 };
 
 inline static void update_colors(Color_256* curr_colors, const Color_256* new_colors,
@@ -82,7 +77,7 @@ inline static Color_256 ray_cluster_colors(RayCluster* rays, uint8_t depth) {
 
     no_hit_mask = _mm256_or_ps(no_hit_mask, new_no_hit_mask);
     if (_mm256_testz_ps(new_hit_mask, new_hit_mask)) {
-      update_colors(&colors, &white_256, no_hit_mask);
+      update_colors(&colors, &global::background_color, no_hit_mask);
       break;
     }
 
@@ -276,18 +271,19 @@ inline static void render_png() {
       (CharColor*)aligned_alloc(32, global::img_width * global::img_height * sizeof(CharColor));
   init_spheres();
   std::array<std::future<void>, global::thread_count> futures;
-  constexpr uint32_t chunk_size = global::img_width * (global::img_height / global::thread_count);
   Camera cam;
 
   auto start_time = system_clock::now();
 
-  for (size_t idx = 0; idx < global::thread_count; idx++) {
-    futures[idx] =
-        std::async(std::launch::async, render, img_data, cam.origin, chunk_size, idx * chunk_size);
-  }
+  for (int row = 0; row < global::img_height; row += global::thread_count) {
+    for (size_t idx = 0; idx < global::thread_count; idx++) {
+      futures[idx] = std::async(std::launch::async, render, img_data, cam.origin, global::img_width,
+                                (row + idx) * global::img_width);
+    }
 
-  for (size_t idx = 0; idx < global::thread_count; idx++) {
-    futures[idx].get();
+    for (size_t idx = 0; idx < global::thread_count; idx++) {
+      futures[idx].get();
+    }
   }
 
   auto end_time = system_clock::now();
@@ -305,7 +301,6 @@ inline static void render_realtime() {
       (CharColor*)aligned_alloc(32, global::img_width * global::img_height * sizeof(CharColor));
   init_spheres();
   std::array<std::future<void>, global::thread_count> futures{};
-  constexpr uint32_t chunk_size = global::img_width * (global::img_height / global::thread_count);
   Camera cam;
 
   SDL_Window* win = NULL;
@@ -340,13 +335,15 @@ inline static void render_realtime() {
 
     SDL_LockTexture(buffer, NULL, (void**)(&img_data), &pitch);
 
-    for (size_t idx = 0; idx < global::thread_count; idx++) {
-      futures[idx] = std::async(std::launch::async, render, img_data, cam.origin, chunk_size,
-                                idx * chunk_size);
-    }
+    for (int row = 0; row < global::img_height; row += global::thread_count) {
+      for (size_t idx = 0; idx < global::thread_count; idx++) {
+        futures[idx] = std::async(std::launch::async, render, img_data, cam.origin,
+                                  global::img_width, (row + idx) * global::img_width);
+      }
 
-    for (size_t idx = 0; idx < global::thread_count; idx++) {
-      futures[idx].get();
+      for (size_t idx = 0; idx < global::thread_count; idx++) {
+        futures[idx].get();
+      }
     }
 
     SDL_UnlockTexture(buffer);

@@ -1,5 +1,6 @@
 #pragma once
 #include "immintrin.h"
+#include "types.h"
 #include <cfloat>
 #include <cstdint>
 
@@ -46,4 +47,5 @@ namespace global {
   constexpr __m256 t_min_vec = {
       0.001f, 0.001f, 0.001f, 0.001f, 0.001f, 0.001f, 0.001f, 0.001f,
   };
+  constexpr Color_256 background_color = {.r = white, .g = white, .b = white};
 } // namespace global
