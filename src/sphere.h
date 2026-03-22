@@ -4,7 +4,6 @@
 #include "rand.h"
 #include "types.h"
 #include <cstdlib>
-#include <immintrin.h>
 #include <vector>
 
 static std::vector<Sphere> spheres;
@@ -51,6 +50,196 @@ inline static void init_spheres() {
     }
   }
 }
+
+#ifdef __ARM_NEON
+#include <arm_neon.h>
+
+// Returns hit t values or 0 depending on if this ray hit this sphere or not
+[[nodiscard]] inline static float32x4_t sphere_hit(const RayCluster* rays, const Sphere* sphere,
+                                              float t_max) {
+
+  Vec3_128 sphere_center = broadcast_vec(&sphere->center);
+  Vec3_128 oc = sphere_center - rays->orig;
+  float rad_2 = sphere->r * sphere->r; //precomputable!!
+  float32x4_t rad_2_vec = vdupq_n_f32(rad_2);
+
+  float32x4_t a = dot(&rays->dir, &rays->dir);
+  float32x4_t b = dot(&rays->dir, &oc);
+  float32x4_t c = dot(&oc, &oc) - rad_2_vec;
+
+  float32x4_t ac = vmulq_f32(a, c);
+  float32x4_t nac = vnegq_f32(ac); //negate
+
+  //inverted
+  float32x4_t discrim = vmlaq_f32(nac, b, b);
+
+  uint32x4_t hit_loc = vcgeq_f32(discrim, global::zeros);
+  int no_hit = testz_128(hit_loc);
+
+  if (no_hit) {
+    return global::zeros;
+  }
+
+  // mask out the discriminants and b where there aren't hits
+  discrim = vreinterpretq_f32_u32(vandq_u32(vreinterpretq_u32_f32(discrim), hit_loc));
+  b = vreinterpretq_f32_u32(vandq_u32(vreinterpretq_u32_f32(discrim), hit_loc));
+
+  float32x4_t sqrt_d = vsqrtq_f32(discrim);
+  float32x4_t recip_a = vrecpeq_f32(a);
+
+  float32x4_t root = vmulq_f32(vsubq_f32(b, sqrt_d), recip_a);
+
+  // allow through roots within the max t value
+  float32x4_t t_max_vec = vdupq_n_f32(t_max);
+  uint32x4_t below_max = vcltq_f32(root, t_max_vec);
+  uint32x4_t above_min = vcgeq_f32(root, global::t_min_vec);
+  hit_loc = vandq_u32(above_min, below_max);
+
+  // Only clear materials can have another root thats worth finding.
+  // This is why i only check for the farther out hit value if the material
+  // is dielectric.
+  if (testz_128(hit_loc) && sphere->mat.type == dielectric) {
+    root = vmulq_f32(vaddq_f32(b, sqrt_d), recip_a);
+    below_max = vcltq_f32(root, t_max_vec);
+    above_min = vcgeq_f32(root, global::t_min_vec);
+    hit_loc = vandq_u32(above_min, below_max);
+  }
+
+  root = vreinterpretq_f32_u32(vandq_u32(vreinterpretq_u32_f32(root), hit_loc));
+  return root;
+}
+
+inline static void set_face_normal(const RayCluster* rays, HitRecords* hit_rec,
+                                   const Vec3_128* outward_norm) {
+  float32x4_t ray_norm_dot = dot(&rays->dir, outward_norm);
+  hit_rec->front_face = vcltq_f32(ray_norm_dot, global::zeros);
+  hit_rec->norm = -*outward_norm;
+  hit_rec->norm = blend_vec128(&hit_rec->norm, outward_norm, hit_rec->front_face);
+}
+
+inline static void create_hit_record(HitRecords* hit_rec, const RayCluster* rays,
+                                     SphereCluster* sphere_cluster, float32x4_t t_vals) {
+  hit_rec->t = t_vals;
+  hit_rec->mat = sphere_cluster->mat;
+
+  //inverted
+  hit_rec->orig.x = vmlaq_f32(t_vals, rays->orig.x, rays->dir.x);
+  hit_rec->orig.y = vmlaq_f32(t_vals, rays->orig.y, rays->dir.y);
+  hit_rec->orig.z = vmlaq_f32(t_vals, rays->orig.z, rays->dir.z);
+
+  Vec3_128 norm = hit_rec->orig - sphere_cluster->center;
+  // normalize
+  norm /= sphere_cluster->r;
+
+  set_face_normal(rays, hit_rec, &norm);
+}
+
+// updates a sphere cluster with a sphere given a mask of where to insert the new sphere's values
+inline static void update_sphere_cluster(SphereCluster* curr_cluster, Sphere curr_sphere,
+                                         uint32x4_t update_mask) {
+
+  if (testz_128(update_mask)) {
+    return;
+  }
+
+  SphereCluster new_spheres = {
+      .center = broadcast_vec(&curr_sphere.center),
+      .mat =
+          {
+              .atten = broadcast_vec(&curr_sphere.mat.atten),
+              .type = vdupq_n_u32(curr_sphere.mat.type),
+          },
+      .r = vdupq_n_f32(curr_sphere.r),
+
+  };
+
+  new_spheres.center &= update_mask;
+  new_spheres.mat.atten &= update_mask;
+  new_spheres.mat.type = vandq_u32(new_spheres.mat.type, update_mask);
+  new_spheres.r = vreinterpretq_f32_u32(vandq_u32(vreinterpretq_u32_f32(new_spheres.r), update_mask));
+
+  // negation of update locations so we can preserve current values
+  // while clearing bits where we will update
+  uint32x4_t preserve_curr = veorq_u32(update_mask, global::all_set);
+
+  SphereCluster curr_spheres = {
+      .center = curr_cluster->center & preserve_curr,
+      .mat =
+          {
+              .atten = curr_cluster->mat.atten & preserve_curr,
+              .type = vandq_u32(curr_cluster->mat.type, preserve_curr),
+          },
+      .r = vreinterpretq_f32_u32(vandq_u32(vreinterpretq_u32_f32(curr_cluster->r), preserve_curr)),
+
+  };
+
+  curr_cluster->center = new_spheres.center + curr_spheres.center;
+  curr_cluster->mat.atten = new_spheres.mat.atten + curr_spheres.mat.atten;
+  curr_cluster->mat.type = new_spheres.mat.type + curr_spheres.mat.type;
+  curr_cluster->r = new_spheres.r + curr_spheres.r;
+};
+
+inline static void find_sphere_hits(HitRecords* hit_rec, const RayCluster* rays, float t_max) {
+
+  SphereCluster closest_spheres = {
+      .center =
+          {
+              .x = global::zeros,
+              .y = global::zeros,
+              .z = global::zeros,
+          },
+      .r = global::zeros,
+  };
+
+  float32x4_t max = vdupq_n_f32(global::float_max);
+
+  // find first sphere as a baseline
+  float32x4_t lowest_t_vals = sphere_hit(rays, &spheres[0], t_max);
+  uint32x4_t hit_loc =  vmvnq_u32(vceqq_f32(lowest_t_vals, global::zeros));
+
+  update_sphere_cluster(&closest_spheres, spheres[0], hit_loc);
+
+  for (size_t i = 1; i < spheres.size(); i++) {
+    float32x4_t new_t_vals = sphere_hit(rays, &spheres[i], t_max);
+
+    // don't update on instances of no hits (hit locations all zeros)
+    hit_loc = vmvnq_u32(vceqq_f32(new_t_vals, global::zeros));
+    if (testz_128(hit_loc)) {
+      continue;
+    }
+
+    uint32x4_t max_u = vreinterpretq_u32_f32(max);
+    uint32x4_t new_t_vals_u = vreinterpretq_u32_f32(new_t_vals);
+
+    // replace all 0's with float maximum to not replace actual values with
+    // 0's during the minimum comparisons. Again, 0's represent no hits
+    uint32x4_t no_hit_loc = veorq_u32(hit_loc, global::all_set);
+    uint32x4_t max_mask = vandq_u32(no_hit_loc, max_u);
+    new_t_vals = vreinterpretq_f32_u32(vorrq_u32(new_t_vals_u, max_mask));
+
+    // replace 0's with max for current lowest too
+    uint32x4_t curr_no_hit_loc = vceqq_f32(lowest_t_vals, global::zeros);
+    max_mask = vandq_u32(curr_no_hit_loc, max_u);
+    float32x4_t lowest_t_masked = vreinterpretq_f32_u32(vorq_u32(vreinterpretq_u32_f32(lowest_t_vals), max_mask));
+
+    // update sphere references based on where new
+    // t values are closer than the current lowest
+    uint32x4_t update_locs = vcltq_f32(new_t_vals, lowest_t_masked);
+    update_sphere_cluster(&closest_spheres, spheres[i], update_locs);
+
+    // update current lowest t values based on new t's, however, mask out
+    // where we put float max values so that the t values still represent
+    // no hits as 0.0
+    lowest_t_vals = vminq_f32(lowest_t_masked, new_t_vals);
+    uint32x4_t actual_vals_loc = vmvnq_u32(vceqq_f32(lowest_t_vals, max));
+    lowest_t_vals = vreinterpretq_f32_u32(vandq_u32(vreinterpretq_u32_f32(lowest_t_vals), actual_vals_loc));
+  }
+
+  create_hit_record(hit_rec, rays, &closest_spheres, lowest_t_vals);
+}
+
+#else
+#include <immintrin.h>
 
 // Returns hit t values or 0 depending on if this ray hit this sphere or not
 [[nodiscard]] inline static __m256 sphere_hit(const RayCluster* rays, const Sphere* sphere,
@@ -227,3 +416,5 @@ inline static void find_sphere_hits(HitRecords* hit_rec, const RayCluster* rays,
 
   create_hit_record(hit_rec, rays, &closest_spheres, lowest_t_vals);
 }
+
+#endif

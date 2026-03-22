@@ -2,6 +2,58 @@
 #include "globals.h"
 #include "types.h"
 
+#ifdef __ARM_NEON
+#include <arm_neon.h>
+
+namespace comptime {
+  // gets us the first pixels row of sample directions during compile time.
+  //
+  // subsequent render iterations will simply scale this by
+  // row and column index to find where to take samples
+  consteval Vec3_128 init_ray_directions() {
+
+    Vec3 top_left{
+        .x = global::cam_origin[0] - global::viewport_width / 2,
+        .y = global::cam_origin[1] + global::viewport_height / 2,
+        .z = global::cam_origin[2] - global::focal_len,
+    };
+
+    top_left.x += global::sample_du;
+    top_left.y += global::sample_dv;
+
+    alignas(32) float x_arr[4];
+    x_arr[0] = top_left.x;
+    for (int i = 1; i < 4; i++) {
+      x_arr[i] = x_arr[i - 1] + global::sample_du;
+    }
+
+    Vec3_128 init_dirs = {
+        .x = {x_arr[0], x_arr[1], x_arr[2], x_arr[3]},
+        .y = {top_left.y, top_left.y, top_left.y, top_left.y},
+        .z = {top_left.z, top_left.z, top_left.z, top_left.z},
+
+    };
+
+    return init_dirs;
+  }
+  consteval uint32x4_t init_rseed_arr() {
+    uint32_t rseed_arr[4];
+    rseed_arr[0] = 0;
+    for (size_t i = 1; i < 4; i++) {
+      rseed_arr[i] = (rseed_arr[i - 1] * 11035152453u + 12345u) & RAND_MAX;
+    }
+    float32x4_t rseed_vec = {
+        (float)rseed_arr[0], (float)rseed_arr[1], (float)rseed_arr[2], (float)rseed_arr[3]
+    };
+
+    return (uint32x4_t)(rseed_vec);
+  }
+
+}; // namespace comptime
+
+#else
+#include <immintrin.h>
+
 namespace comptime {
   // gets us the first pixels row of sample directions during compile time.
   //
@@ -50,3 +102,5 @@ namespace comptime {
   }
 
 }; // namespace comptime
+
+#endif

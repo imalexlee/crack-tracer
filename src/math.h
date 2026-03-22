@@ -3,6 +3,232 @@
 #include "types.h"
 #include <cstdint>
 #include <cstdio>
+
+#ifdef __ARM_NEON
+#include <arm_neon.h>
+
+// OPERATORS
+
+inline static Vec3_128 operator+(const Vec3_128& a, const Vec3_128& b) {
+  return Vec3_128{
+      .x = vaddq_f32(a.x, b.x),
+      .y = vaddq_f32(a.y, b.y),
+      .z = vaddq_f32(a.z, b.z),
+  };
+}
+
+inline static Vec3_128 operator+(const Vec3_128& a, const float32x4_t& b) {
+  return Vec3_128{
+      .x = vaddq_f32(a.x, b),
+      .y = vaddq_f32(a.y, b),
+      .z = vaddq_f32(a.z, b),
+  };
+}
+
+inline static Vec3_128& operator+=(Vec3_128& a, const Vec3_128& b) {
+  a.x = vaddq_f32(a.x, b.x);
+  a.y = vaddq_f32(a.y, b.y);
+  a.z = vaddq_f32(a.z, b.z);
+  return a;
+}
+
+inline static Vec3_128 operator-(const Vec3_128& a, const Vec3_128& b) {
+  return Vec3_128{
+      .x = vsubq_f32(a.x, b.x),
+      .y = vsubq_f32(a.y, b.y),
+      .z = vsubq_f32(a.z, b.z),
+  };
+}
+
+inline static Vec3_128& operator-=(Vec3_128& a, const Vec3_128& b) {
+  a.x = vsubq_f32(a.x, b.x);
+  a.y = vsubq_f32(a.y, b.y);
+  a.z = vsubq_f32(a.z, b.z);
+  return a;
+}
+
+// inverse
+inline static Vec3_128 operator-(const Vec3_128& a) {
+  // -1
+  float32x4_t invert = vsubq_f32(vdupq_n_f32(0), global::white);
+  return Vec3_128{
+      .x = vmulq_f32(a.x, invert),
+      .y = vmulq_f32(a.y, invert),
+      .z = vmulq_f32(a.z, invert),
+  };
+}
+
+inline static Vec3_128 operator*(const Vec3_128& a, const Vec3_128& b) {
+  return Vec3_128{
+      .x = vmulq_f32(a.x, b.x),
+      .y = vmulq_f32(a.y, b.y),
+      .z = vmulq_f32(a.z, b.z),
+  };
+}
+
+inline static Vec3_128 operator*(const Vec3_128& a, const float32x4_t& b) {
+  return Vec3_128{
+      .x = vmulq_f32(a.x, b),
+      .y = vmulq_f32(a.y, b),
+      .z = vmulq_f32(a.z, b),
+  };
+}
+
+inline static Vec3_128& operator*=(Vec3_128& a, const Vec3_128& b) {
+  a.x = vmulq_f32(a.x, b.x);
+  a.y = vmulq_f32(a.y, b.y);
+  a.z = vmulq_f32(a.z, b.z);
+  return a;
+}
+
+inline static Vec3_128& operator*=(Vec3_128& a, const float32x4_t& b) {
+  a.x = vmulq_f32(a.x, b);
+  a.y = vmulq_f32(a.y, b);
+  a.z = vmulq_f32(a.z, b);
+  return a;
+}
+
+inline static Vec3_128 operator/(const Vec3_128& a, const Vec3_128& b) {
+
+  Vec3_128 rcp_b = {
+      .x = vrecpeq_f32(b.x),
+      .y = vrecpeq_f32(b.y),
+      .z = vrecpeq_f32(b.z),
+  };
+
+  return Vec3_128{
+      .x = vmulq_f32(a.x, rcp_b.x),
+      .y = vmulq_f32(a.y, rcp_b.y),
+      .z = vmulq_f32(a.z, rcp_b.z),
+  };
+}
+
+inline static Vec3_128& operator/=(Vec3_128& a, const float32x4_t& b) {
+
+  float32x4_t rcp_b = vrecpeq_f32(b);
+
+  a.x = vmulq_f32(a.x, rcp_b);
+  a.y = vmulq_f32(a.y, rcp_b);
+  a.z = vmulq_f32(a.z, rcp_b);
+  return a;
+}
+
+inline static Vec3_128 operator&(const Vec3_128& a, const uint32x4_t& b) {
+
+  uint32x4_t x = vandq_u32(vreinterpretq_u32_f32(a.x), b);
+  uint32x4_t y = vandq_u32(vreinterpretq_u32_f32(a.y), b);
+  uint32x4_t z = vandq_u32(vreinterpretq_u32_f32(a.z), b);
+
+  return Vec3_128{
+      .x = vreinterpretq_f32_u32(x),
+      .y = vreinterpretq_f32_u32(y),
+      .z = vreinterpretq_f32_u32(z),
+  };
+}
+
+inline static Vec3_128& operator&=(Vec3_128& a, const uint32x4_t& b) {
+
+  uint32x4_t x = vandq_u32(vreinterpretq_u32_f32(a.x), b);
+  uint32x4_t y = vandq_u32(vreinterpretq_u32_f32(a.y), b);
+  uint32x4_t z = vandq_u32(vreinterpretq_u32_f32(a.z), b);
+
+  a.x = vreinterpretq_f32_u32(x);
+  a.y = vreinterpretq_f32_u32(y);
+  a.z = vreinterpretq_f32_u32(z);
+  return a;
+}
+
+[[nodiscard]] inline static float32x4_t dot(const Vec3_128* a, const Vec3_128* b) {
+  float32x4_t dot = vmulq_f32(a->x, b->x);
+
+  //inverted 
+  dot = vmlaq_f32(dot, a->y, b->y);
+  return vmlaq_f32(dot, a->z, b->z);
+}
+
+// reflect a ray about the axis
+// v = v - 2*dot(v,n)*n;
+[[nodiscard]] inline static Vec3_128 reflect(const Vec3_128* ray_dir, const Vec3_128* axis) {
+
+  constexpr float init[4] = {2.f, 2.f, 2.f, 2.f};
+  float32x4_t reflect_scale = vld1q_f32(init);
+
+  return *ray_dir - *axis * dot(ray_dir, axis) * reflect_scale;
+}
+
+[[nodiscard]] inline static float32x4_t abs_128(float32x4_t vec) {
+
+  uint32x4_t v = vreinterpretq_u32_f32(vec);
+  uint32x4_t sign_mask = vshrq_n_u32(global::all_set, 1);
+
+  return vreinterpretq_f32_u32(vandq_u32(v, sign_mask));
+}
+
+[[nodiscard]] inline static Vec3_128 refract(const Vec3_128* ray_dir, const Vec3_128* norm,
+                                             float32x4_t ratio) {
+  //nu macell ???                                          
+  Vec3_128 inverted_ray_dir = -*ray_dir;
+  float32x4_t cos_theta = vminq_f32(dot(&inverted_ray_dir, norm), global::white);
+
+  //inverted
+  Vec3_128 r_out_perp = {
+      .x = vmlaq_f32(norm->x, ray_dir->x, cos_theta),
+      .y = vmlaq_f32(norm->y, ray_dir->y, cos_theta),
+      .z = vmlaq_f32(norm->z, ray_dir->z, cos_theta),
+  };
+  r_out_perp *= ratio;
+
+  float32x4_t r_out_parallel_scale = global::white - dot(&r_out_perp, &r_out_perp);
+
+  r_out_parallel_scale = abs_128(r_out_parallel_scale);
+
+  // square then negate
+  float32x4_t parallel_scale_rsqrt = vrsqrteq_f32(r_out_parallel_scale);
+  r_out_parallel_scale *= -parallel_scale_rsqrt;
+
+  //inverted
+  return Vec3_128{
+      .x = vmlaq_f32(norm->x, r_out_perp.x, r_out_parallel_scale),
+      .y = vmlaq_f32(norm->y, r_out_perp.y, r_out_parallel_scale),
+      .z = vmlaq_f32(norm->z, r_out_perp.z, r_out_parallel_scale),
+  };
+}
+
+inline static void normalize(Vec3_128* vec) {
+  float32x4_t vec_len_2 = dot(vec, vec);
+  float32x4_t recip_len = vrsqrteq_f32(vec_len_2);
+
+  *vec *= recip_len;
+}
+
+inline static Vec3_128 broadcast_vec(const Vec3* vec) {
+  return Vec3_128{
+      .x = vdupq_n_f32(vec->x),
+      .y = vdupq_n_f32(vec->y),
+      .z = vdupq_n_f32(vec->z),
+  };
+}
+
+inline static Vec3_128 blend_vec128(const Vec3_128* a, const Vec3_128* b, uint32x4_t mask) {
+  return Vec3_128{
+      //inverted
+      .x = vbslq_f32(mask, a->x, b->x),
+      .y = vbslq_f32(mask, a->y, b->y),
+      .z = vbslq_f32(mask, a->z, b->z),
+  };
+}
+
+inline static int testz_128(uint32x4_t a) {
+    uint32x4_t and_res = vandq_u32(a, global::sign_bit);
+    return vaddvq_u32(and_res);
+}
+
+inline static uint32_t f_to_i(float f_val) {
+  f_val += 1 << 23;
+  return ((uint32_t)f_val) & 0x007FFFFF;
+}
+
+#else
 #include <immintrin.h>
 
 // OPERATORS
@@ -201,3 +427,5 @@ inline static uint32_t f_to_i(float f_val) {
   f_val += 1 << 23;
   return ((uint32_t)f_val) & 0x007FFFFF;
 }
+
+#endif
