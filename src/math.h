@@ -219,8 +219,7 @@ inline static Vec3_128 blend_vec128(const Vec3_128* a, const Vec3_128* b, uint32
 }
 
 inline static int testz_128(uint32x4_t a) {
-    uint32x4_t and_res = vandq_u32(a, global::sign_bit);
-    return vaddvq_u32(and_res);
+  return vmaxvq_u32(a) == 0;
 }
 
 inline static uint32_t f_to_i(float f_val) {

@@ -57,7 +57,7 @@ private:
 
   [[nodiscard]] inline uint32x4_t lcg_rand_128() {
 
-    rseed_vec = vmull_u32(rseed_vec, r_a);
+    rseed_vec = vmulq_u32(rseed_vec, r_a);
     rseed_vec = vaddq_u32(rseed_vec, r_b);
     rseed_vec = vandq_u32(rseed_vec, rand_max_vec);
 

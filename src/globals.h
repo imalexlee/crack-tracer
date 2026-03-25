@@ -19,14 +19,14 @@ constexpr Color_128 night = {
 
 namespace global {
   // each group calculates 8 samples.
-  constexpr uint16_t sample_group_num = 500;
+  constexpr uint16_t sample_group_num = 20;//500;
   constexpr uint8_t shuf_all_first = 0;
   constexpr uint8_t shuf_all_second = 85;
   constexpr uint8_t shuf_all_third = 170;
   constexpr uint8_t ray_depth = 20;
   constexpr float float_max = FLT_MAX;
-  constexpr uint16_t img_width = 2560;
-  constexpr uint16_t img_height = 1440;
+  constexpr uint16_t img_width = 128;//2560;
+  constexpr uint16_t img_height = 128;//1440;
   // constexpr uint16_t img_width = 1920;
   // constexpr uint16_t img_height = 1080;
   constexpr float viewport_height = 2.f;
@@ -38,6 +38,7 @@ namespace global {
   constexpr float sample_dv = pix_dv / (sample_group_num + 1);
   constexpr float focal_len = 1.0;
   constexpr float color_multiplier = 255.f / (sample_group_num * 8);
+  constexpr float single_color_multiplier = 255.f;
   constexpr uint8_t thread_count = 4;
   constexpr RenderMode active_render_mode = RenderMode::png;
   // index of refraction
