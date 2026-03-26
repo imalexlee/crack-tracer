@@ -40,7 +40,7 @@ inline static void update_colors(Color_128* curr_colors, const Color_128* new_co
 inline static Color_128 ray_cluster_colors(RayCluster* rays) {
   // will be used to add a sky tint to rays that at some point bounce off into space.
   // if a ray never bounces away (within amount of bounces set by depth), the
-  // hit_mask will be all set (packed floats) and the sky tint will not affect its final color
+  // hit_mask will be all set and the sky tint will not affect its final color
   uint32x4_t no_hit_mask = vreinterpretq_u32_f32(global::zeros);
 
   HitRecords hit_rec; 
@@ -51,9 +51,6 @@ inline static Color_128 ray_cluster_colors(RayCluster* rays) {
       .y = global::white,
       .z = global::white,
   };
-
-  //test
-  //return colors;
 
   for (int i = 0; i < global::ray_depth; i++) {
 
@@ -84,8 +81,8 @@ inline static Color_128 ray_cluster_colors(RayCluster* rays) {
 inline static void write_out_color_buf(const Color* color_buf, CharColor* img_buf,
                                        uint32_t write_pos) {
 
-  //float32x4_t cm = vdupq_n_f32(global::color_multiplier);
-  float32x4_t cm = vdupq_n_f32(global::single_color_multiplier);
+  float32x4_t cm = vdupq_n_f32(global::color_multiplier);
+  //float32x4_t cm = vdupq_n_f32(global::single_color_multiplier);
 
   uint8_t* buf = (uint8_t*)img_buf;
 

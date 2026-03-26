@@ -31,7 +31,7 @@ public:
     float32x4_t range = max_vec - min_vec;
 
     //inverted
-    return vmlaq_f32(range, min_vec, scale);
+    return vmlaq_f32(min_vec, range, scale);
   }
 
 private:

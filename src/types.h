@@ -47,7 +47,7 @@ struct alignas(16) Material {
   MatType type;
 };
 
-struct alignas(32) Sphere {
+struct alignas(16) Sphere {
   Vec3 center;
   Material mat;
   float r;

@@ -49,12 +49,10 @@ inline static Vec3_128& operator-=(Vec3_128& a, const Vec3_128& b) {
 
 // inverse
 inline static Vec3_128 operator-(const Vec3_128& a) {
-  // -1
-  float32x4_t invert = vsubq_f32(vdupq_n_f32(0), global::white);
   return Vec3_128{
-      .x = vmulq_f32(a.x, invert),
-      .y = vmulq_f32(a.y, invert),
-      .z = vmulq_f32(a.z, invert),
+      .x = vnegq_f32(a.x),
+      .y = vnegq_f32(a.y),
+      .z = vnegq_f32(a.z),
   };
 }
 
@@ -89,17 +87,10 @@ inline static Vec3_128& operator*=(Vec3_128& a, const float32x4_t& b) {
 }
 
 inline static Vec3_128 operator/(const Vec3_128& a, const Vec3_128& b) {
-
-  Vec3_128 rcp_b = {
-      .x = vrecpeq_f32(b.x),
-      .y = vrecpeq_f32(b.y),
-      .z = vrecpeq_f32(b.z),
-  };
-
   return Vec3_128{
-      .x = vmulq_f32(a.x, rcp_b.x),
-      .y = vmulq_f32(a.y, rcp_b.y),
-      .z = vmulq_f32(a.z, rcp_b.z),
+      .x = vdivq_f32(a.x, b.x),
+      .y = vdivq_f32(a.y, b.y),
+      .z = vdivq_f32(a.z, b.z),
   };
 }
 
@@ -149,19 +140,13 @@ inline static Vec3_128& operator&=(Vec3_128& a, const uint32x4_t& b) {
 // reflect a ray about the axis
 // v = v - 2*dot(v,n)*n;
 [[nodiscard]] inline static Vec3_128 reflect(const Vec3_128* ray_dir, const Vec3_128* axis) {
-
-  constexpr float init[4] = {2.f, 2.f, 2.f, 2.f};
-  float32x4_t reflect_scale = vld1q_f32(init);
+  float32x4_t reflect_scale = {2.f, 2.f, 2.f, 2.f};//vdupq_n_f32(2.f);
 
   return *ray_dir - *axis * dot(ray_dir, axis) * reflect_scale;
 }
 
 [[nodiscard]] inline static float32x4_t abs_128(float32x4_t vec) {
-
-  uint32x4_t v = vreinterpretq_u32_f32(vec);
-  uint32x4_t sign_mask = vshrq_n_u32(global::all_set, 1);
-
-  return vreinterpretq_f32_u32(vandq_u32(v, sign_mask));
+  return vabsq_f32(vec);
 }
 
 [[nodiscard]] inline static Vec3_128 refract(const Vec3_128* ray_dir, const Vec3_128* norm,
@@ -172,9 +157,9 @@ inline static Vec3_128& operator&=(Vec3_128& a, const uint32x4_t& b) {
 
   //inverted
   Vec3_128 r_out_perp = {
-      .x = vmlaq_f32(norm->x, ray_dir->x, cos_theta),
-      .y = vmlaq_f32(norm->y, ray_dir->y, cos_theta),
-      .z = vmlaq_f32(norm->z, ray_dir->z, cos_theta),
+      .x = vmlaq_f32(ray_dir->x, norm->x, cos_theta),
+      .y = vmlaq_f32(ray_dir->y, norm->y, cos_theta),
+      .z = vmlaq_f32(ray_dir->z, norm->z, cos_theta),
   };
   r_out_perp *= ratio;
 
@@ -183,14 +168,17 @@ inline static Vec3_128& operator&=(Vec3_128& a, const uint32x4_t& b) {
   r_out_parallel_scale = abs_128(r_out_parallel_scale);
 
   // square then negate
-  float32x4_t parallel_scale_rsqrt = vrsqrteq_f32(r_out_parallel_scale);
-  r_out_parallel_scale *= -parallel_scale_rsqrt;
+  //float32x4_t parallel_scale_rsqrt = vrsqrteq_f32(r_out_parallel_scale);
+  //r_out_parallel_scale *= -parallel_scale_rsqrt;
+
+  //square then negate = -sqrt(x)
+  r_out_parallel_scale = vnegq_f32(vsqrtq_f32(r_out_parallel_scale));
 
   //inverted
   return Vec3_128{
-      .x = vmlaq_f32(norm->x, r_out_perp.x, r_out_parallel_scale),
-      .y = vmlaq_f32(norm->y, r_out_perp.y, r_out_parallel_scale),
-      .z = vmlaq_f32(norm->z, r_out_perp.z, r_out_parallel_scale),
+      .x = vmlaq_f32(r_out_perp.x, norm->x, r_out_parallel_scale),
+      .y = vmlaq_f32(r_out_perp.y, norm->y, r_out_parallel_scale),
+      .z = vmlaq_f32(r_out_perp.z, norm->z, r_out_parallel_scale),
   };
 }
 
