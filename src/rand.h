@@ -37,7 +37,7 @@ public:
 private:
   static inline thread_local uint32x4_t rseed_vec = comptime::init_rseed_arr();
   static inline thread_local uint32_t rseed = 0;
-  const uint32x4_t r_a = vdupq_n_u32((uint32_t)11035152453u);
+  const uint32x4_t r_a = vdupq_n_u32((uint32_t)1103515245u);
   const uint32x4_t r_b = vdupq_n_u32(12345u);
   const uint32x4_t rand_max_vec = vdupq_n_u32(RAND_MAX);
   static constexpr float rcp_rand_max = 1.f / RAND_MAX;
@@ -56,12 +56,9 @@ private:
   }
 
   [[nodiscard]] inline uint32x4_t lcg_rand_128() {
-
-    rseed_vec = vmulq_u32(rseed_vec, r_a);
-    rseed_vec = vaddq_u32(rseed_vec, r_b);
-    rseed_vec = vandq_u32(rseed_vec, rand_max_vec);
-
-    return rseed_vec;
+    //equivalent
+    rseed_vec = vmlaq_u32(r_b, rseed_vec, r_a);
+    return vandq_u32(rseed_vec, rand_max_vec);
   };
 
   // scalar versions of rand generation

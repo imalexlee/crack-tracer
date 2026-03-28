@@ -140,7 +140,7 @@ inline static Vec3_128& operator&=(Vec3_128& a, const uint32x4_t& b) {
 // reflect a ray about the axis
 // v = v - 2*dot(v,n)*n;
 [[nodiscard]] inline static Vec3_128 reflect(const Vec3_128* ray_dir, const Vec3_128* axis) {
-  float32x4_t reflect_scale = {2.f, 2.f, 2.f, 2.f};//vdupq_n_f32(2.f);
+  float32x4_t reflect_scale = vdupq_n_f32(2.f);
 
   return *ray_dir - *axis * dot(ray_dir, axis) * reflect_scale;
 }
@@ -200,9 +200,9 @@ inline static Vec3_128 broadcast_vec(const Vec3* vec) {
 inline static Vec3_128 blend_vec128(const Vec3_128* a, const Vec3_128* b, uint32x4_t mask) {
   return Vec3_128{
       //inverted
-      .x = vbslq_f32(mask, a->x, b->x),
-      .y = vbslq_f32(mask, a->y, b->y),
-      .z = vbslq_f32(mask, a->z, b->z),
+      .x = vbslq_f32(mask, b->x, a->x),
+      .y = vbslq_f32(mask, b->y, a->y),
+      .z = vbslq_f32(mask, b->z, a->z),
   };
 }
 

@@ -25,8 +25,8 @@ namespace global {
   constexpr uint8_t shuf_all_third = 170;
   constexpr uint8_t ray_depth = 20;
   constexpr float float_max = FLT_MAX;
-  constexpr uint16_t img_width = 128;//2560;
-  constexpr uint16_t img_height = 128;//1440;
+  constexpr uint16_t img_width = 1024;//2560;
+  constexpr uint16_t img_height = 1024;//1440;
   // constexpr uint16_t img_width = 1920;
   // constexpr uint16_t img_height = 1080;
   constexpr float viewport_height = 2.f;

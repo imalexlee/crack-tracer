@@ -28,13 +28,15 @@ constexpr Color_128 sky = {
 
 inline static void update_colors(Color_128* curr_colors, const Color_128* new_colors,
                                  uint32x4_t update_mask) {
+  //equivalent
+  float32x4_t mul_x = vmulq_f32(curr_colors->x, new_colors->x);
+  float32x4_t mul_y = vmulq_f32(curr_colors->y, new_colors->y);
+  float32x4_t mul_z = vmulq_f32(curr_colors->z, new_colors->z);
 
-  uint32x4_t new_no_hit_mask = veorq_u32(update_mask, global::all_set);
-  float32x4_t preserve_curr = vreinterpretq_f32_u32(vandq_u32(vreinterpretq_u32_f32(global::white), new_no_hit_mask));
-
-  // multiply current colors by the attenuation of new hits.
-  // fill 1.0 for no hits in order to preserve current colors when multiplying
-  *curr_colors *= ((*new_colors & update_mask) + preserve_curr);
+  //optimized for NEON
+  curr_colors->x = vbslq_f32(update_mask, mul_x, curr_colors->x);
+  curr_colors->y = vbslq_f32(update_mask, mul_y, curr_colors->y);
+  curr_colors->z = vbslq_f32(update_mask, mul_z, curr_colors->z);
 }
 
 inline static Color_128 ray_cluster_colors(RayCluster* rays) {
@@ -82,8 +84,6 @@ inline static void write_out_color_buf(const Color* color_buf, CharColor* img_bu
                                        uint32_t write_pos) {
 
   float32x4_t cm = vdupq_n_f32(global::color_multiplier);
-  //float32x4_t cm = vdupq_n_f32(global::single_color_multiplier);
-
   uint8_t* buf = (uint8_t*)img_buf;
 
   uint32_t byte_offset = write_pos * 16 * 3;                             
@@ -95,11 +95,6 @@ inline static void write_out_color_buf(const Color* color_buf, CharColor* img_bu
     float32x4_t f2 = vmulq_f32(vld1q_f32((float*)color_buf + i + 8), cm);
     float32x4_t f3 = vmulq_f32(vld1q_f32((float*)color_buf + i + 12), cm);
 
-    //print_vec_128_f32(f0);
-    //print_vec_128_f32(f1);
-    //print_vec_128_f32(f2);
-    //print_vec_128_f32(f3);
-
     uint32x4_t i0 = vcvtq_u32_f32(f0);
     uint32x4_t i1 = vcvtq_u32_f32(f1);
     uint32x4_t i2 = vcvtq_u32_f32(f2);
@@ -110,16 +105,13 @@ inline static void write_out_color_buf(const Color* color_buf, CharColor* img_bu
     uint16x8_t u16_1 = vqmovn_high_u32(vqmovn_u32(i2), i3);
     uint8x16_t u8_out = vqmovn_high_u16(vqmovn_u16(u16_0), u16_1);
 
-    //print_vec_128_u8(u8_out);
-    //printf("byte_offset %u\n", byte_offset);
-
     vst1q_u8(buf + byte_offset + i, u8_out);
   }
 }
 
 inline static void render(CharColor* img_buf, const Vec3 cam_origin, uint32_t pix_offset) {
   // comptime generated
-    printf("render() begin\n");
+  //printf("render() begin\n");
 
   constexpr Vec3_128 base_dirs = comptime::init_ray_directions();
   RayCluster base_rays = {
@@ -166,13 +158,9 @@ inline static void render(CharColor* img_buf, const Vec3 cam_origin, uint32_t pi
 
       color_buf_idx++;
 
-      //printf("%d\n", color_buf_idx);
-
       if (color_buf_idx != 16) {
         continue;
       }
-
-      //printf("16!\n");
 
       write_out_color_buf(color_buf, img_buf, write_pos);
       write_pos++;
@@ -420,7 +408,7 @@ inline static void render_png() {
       (CharColor*)aligned_alloc(16, global::img_width * global::img_height * sizeof(CharColor));
   init_spheres();
 
-  printf("init_spheres() done\n");
+  //printf("init_spheres() done\n");
 
   std::array<std::future<void>, global::thread_count> futures;
   Camera cam;

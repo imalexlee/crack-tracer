@@ -95,7 +95,8 @@ inline static void scatter_lambertian(RayCluster* rays, const HitRecords* hit_re
 
 inline static void scatter_dielectric(RayCluster* rays, const HitRecords* hit_rec) {
 
-  float32x4_t ri = vbslq_f32(hit_rec->front_face, global::ir_vec, global::rcp_ir_vec);
+  //float32x4_t ri = vbslq_f32(hit_rec->front_face, global::ir_vec, global::rcp_ir_vec);
+  float32x4_t ri = vbslq_f32(hit_rec->front_face, global::rcp_ir_vec, global::ir_vec);
   Vec3_128 unit_dir = rays->dir;
   normalize(&unit_dir);
   

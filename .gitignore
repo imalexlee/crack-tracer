@@ -1,3 +1,4 @@
 out/
 asm_output.s
 build/*
+build_tests/*
