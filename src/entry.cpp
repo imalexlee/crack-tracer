@@ -7,4 +7,6 @@ int main() {
   } else if constexpr (global::active_render_mode == RenderMode::png) {
     render_png();
   }
+  
+  return 0;
 }

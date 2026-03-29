@@ -12,10 +12,169 @@
 #include <cstdint>
 #include <cstdio>
 #include <future>
-#include <immintrin.h>
+
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "utils.h"
 #include <stb_image_write.h>
+
+#ifdef __ARM_NEON
+#include <arm_neon.h>
+
+constexpr Color_128 sky = {
+    .x = {0.5f, 0.5f, 0.5f, 0.5f},
+    .y = {0.7f, 0.7f, 0.7f, 0.7f},
+    .z = {1.f, 1.f, 1.f, 1.f},
+};
+
+inline static void update_colors(Color_128* curr_colors, const Color_128* new_colors,
+                                 uint32x4_t update_mask) {
+  //equivalent
+  float32x4_t mul_x = vmulq_f32(curr_colors->x, new_colors->x);
+  float32x4_t mul_y = vmulq_f32(curr_colors->y, new_colors->y);
+  float32x4_t mul_z = vmulq_f32(curr_colors->z, new_colors->z);
+
+  //optimized for NEON
+  curr_colors->x = vbslq_f32(update_mask, mul_x, curr_colors->x);
+  curr_colors->y = vbslq_f32(update_mask, mul_y, curr_colors->y);
+  curr_colors->z = vbslq_f32(update_mask, mul_z, curr_colors->z);
+}
+
+inline static Color_128 ray_cluster_colors(RayCluster* rays) {
+  // will be used to add a sky tint to rays that at some point bounce off into space.
+  // if a ray never bounces away (within amount of bounces set by depth), the
+  // hit_mask will be all set and the sky tint will not affect its final color
+  uint32x4_t no_hit_mask = vreinterpretq_u32_f32(global::zeros);
+
+  HitRecords hit_rec; 
+  hit_rec.front_face = vreinterpretq_u32_f32(global::zeros);
+
+  Color_128 colors{
+      .x = global::white,
+      .y = global::white,
+      .z = global::white,
+  };
+
+  for (int i = 0; i < global::ray_depth; i++) {
+
+    find_sphere_hits(&hit_rec, rays, INFINITY);
+
+    // or a mask when a value is not a hit, at any point.
+    // if all are zero, break
+
+    uint32x4_t new_hit_mask = vcgtq_f32(hit_rec.t, global::zeros);
+    uint32x4_t new_no_hit_mask = veorq_u32(new_hit_mask, global::all_set);
+
+    no_hit_mask = vorrq_u32(no_hit_mask, new_no_hit_mask);
+    if (testz_128(new_hit_mask)) {
+      update_colors(&colors, &global::background_color, no_hit_mask);
+      break;
+    }
+
+    scatter(rays, &hit_rec);
+
+    update_colors(&colors, &hit_rec.mat.atten, new_hit_mask);
+  }
+
+  return colors;
+};
+
+// writes a color buffer of 16 Color values to an image buffer
+// uses non temporal writes to avoid filling data cache
+inline static void write_out_color_buf(const Color* color_buf, CharColor* img_buf,
+                                       uint32_t write_pos) {
+
+  float32x4_t cm = vdupq_n_f32(global::color_multiplier);
+  uint8_t* buf = (uint8_t*)img_buf;
+
+  uint32_t byte_offset = write_pos * 16 * 3;                             
+
+  //16 colors - 3 iterations
+  for(int i = 0; i < 48; i += 16) {
+    float32x4_t f0 = vmulq_f32(vld1q_f32((float*)color_buf + i), cm);
+    float32x4_t f1 = vmulq_f32(vld1q_f32((float*)color_buf + i + 4), cm);
+    float32x4_t f2 = vmulq_f32(vld1q_f32((float*)color_buf + i + 8), cm);
+    float32x4_t f3 = vmulq_f32(vld1q_f32((float*)color_buf + i + 12), cm);
+
+    uint32x4_t i0 = vcvtq_u32_f32(f0);
+    uint32x4_t i1 = vcvtq_u32_f32(f1);
+    uint32x4_t i2 = vcvtq_u32_f32(f2);
+    uint32x4_t i3 = vcvtq_u32_f32(f3);
+
+    //narrowing thanks to NEON!
+    uint16x8_t u16_0 = vqmovn_high_u32(vqmovn_u32(i0), i1);
+    uint16x8_t u16_1 = vqmovn_high_u32(vqmovn_u32(i2), i3);
+    uint8x16_t u8_out = vqmovn_high_u16(vqmovn_u16(u16_0), u16_1);
+
+    vst1q_u8(buf + byte_offset + i, u8_out);
+  }
+}
+
+inline static void render(CharColor* img_buf, const Vec3 cam_origin, uint32_t pix_offset) {
+  // comptime generated
+  //printf("render() begin\n");
+
+  constexpr Vec3_128 base_dirs = comptime::init_ray_directions();
+  RayCluster base_rays = {
+      .dir = base_dirs,
+      .orig = broadcast_vec(&cam_origin),
+  };
+
+  Color_128 sample_color;
+  alignas(16) Color color_buf[16];
+
+  constexpr uint32_t write_chunk_size = global::img_width / 16;
+  uint32_t row = pix_offset / global::img_width;
+  uint32_t write_pos = row * write_chunk_size;
+  uint16_t color_buf_idx = 0;
+  uint16_t sample_group;
+
+  static_assert(global::sample_group_num > 0,
+                "there must be at least one group of ray samples to calculate");
+
+  for (; row < global::img_height; row += global::thread_count) {
+    for (uint32_t col = 0; col < global::img_width; col++) {
+      sample_color.x = global::zeros;
+      sample_color.y = global::zeros;
+      sample_color.z = global::zeros;
+
+      for (sample_group = 0; sample_group < global::sample_group_num; sample_group++) {
+        RayCluster samples = base_rays;
+
+        float x_scale = global::pix_du * col;
+        float32x4_t x_scale_vec = vdupq_n_f32(x_scale);
+        samples.dir.x = samples.dir.x + x_scale_vec;
+
+        float y_scale = (global::pix_dv * row) + (sample_group * global::sample_dv);
+        float32x4_t y_scale_vec = vdupq_n_f32(y_scale);
+        samples.dir.y += y_scale_vec;
+
+        sample_color += ray_cluster_colors(&samples);
+      }
+
+      // accumulate all color channels into first float of vec
+      color_buf[color_buf_idx].x = vaddvq_f32(sample_color.x);
+      color_buf[color_buf_idx].y = vaddvq_f32(sample_color.y);
+      color_buf[color_buf_idx].z = vaddvq_f32(sample_color.z);
+
+      color_buf_idx++;
+
+      if (color_buf_idx != 16) {
+        continue;
+      }
+
+      write_out_color_buf(color_buf, img_buf, write_pos);
+      write_pos++;
+
+      color_buf_idx = 0;
+    }
+    write_pos += ((global::thread_count - 1) * write_chunk_size);
+
+    //printf("row %d\n", row);
+  }
+}
+
+#else
+#include <immintrin.h>
 
 constexpr Color_256 sky = {
     .x = {0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f},
@@ -237,6 +396,8 @@ inline static void render(CharColor* img_buf, const Vec3 cam_origin, uint32_t pi
   }
 }
 
+#endif
+
 using namespace std::chrono;
 
 inline static void render_png() {
@@ -244,8 +405,11 @@ inline static void render_png() {
                 "Thread count must divide rows equally");
 
   CharColor* img_data =
-      (CharColor*)aligned_alloc(32, global::img_width * global::img_height * sizeof(CharColor));
+      (CharColor*)aligned_alloc(16, global::img_width * global::img_height * sizeof(CharColor));
   init_spheres();
+
+  //printf("init_spheres() done\n");
+
   std::array<std::future<void>, global::thread_count> futures;
   Camera cam;
 
@@ -263,6 +427,7 @@ inline static void render_png() {
   auto end_time = system_clock::now();
   auto dur = duration<float>(end_time - start_time);
   float milli = duration_cast<microseconds>(dur).count() / 1000.f;
+
   printf("render time (ms): %f\n", milli);
   stbi_write_png("out.png", global::img_width, global::img_height, 3, img_data,
                  global::img_width * sizeof(CharColor));

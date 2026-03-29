@@ -5,7 +5,6 @@
 #include "types.h"
 #include <cmath>
 #include <cstdlib>
-#include <immintrin.h>
 
 constexpr Color silver = {.x = 0.5f, .y = 0.5f, .z = 0.5f};
 constexpr Color grey = {.x = 0.5f, .y = 0.5f, .z = 0.5f};
@@ -29,6 +28,145 @@ constexpr Material star_lambertian = {.atten = moon, .type = MatType::lambertian
 constexpr Material grey_lambertian = {.atten = grey, .type = MatType::lambertian};
 
 constexpr Material glass = {.atten = white, .type = MatType::dielectric};
+
+#ifdef __ARM_NEON
+#include <arm_neon.h>
+
+alignas(32) static const uint32_t metallic_types[4] = {
+    MatType::metallic, MatType::metallic, MatType::metallic, MatType::metallic
+};
+
+alignas(32) static const uint32_t lambertian_types[4] = {
+    MatType::lambertian, MatType::lambertian, MatType::lambertian, MatType::lambertian
+};
+
+alignas(32) static const uint32_t dielectric_types[4] = {
+    MatType::dielectric, MatType::dielectric, MatType::dielectric, MatType::dielectric
+};
+
+static LCGRand lcg_rand;
+inline static void scatter_metallic(RayCluster* rays, const HitRecords* hit_rec) {
+  Vec3_128 reflected = reflect(&rays->dir, &hit_rec->norm);
+  normalize(&reflected);
+
+  float32x4_t dp = dot(&reflected, &hit_rec->norm);
+  uint32x4_t greater_than_zero = vcgtq_f32(dp, global::zeros);
+
+  rays->dir = reflected & greater_than_zero;
+};
+
+[[nodiscard]] inline static uint32x4_t near_zero(const Vec3_128* vec) {
+
+  uint32x4_t near_x =  vcltq_f32(abs_128(vec->x), global::t_min_vec);
+  uint32x4_t near_y =  vcltq_f32(abs_128(vec->y), global::t_min_vec);
+  uint32x4_t near_z =  vcltq_f32(abs_128(vec->z), global::t_min_vec);
+
+  return vandq_u32(near_x, vandq_u32(near_y, near_z));
+};
+
+inline static void scatter_lambertian(RayCluster* rays, const HitRecords* hit_rec) {
+  Vec3_128 rand_vec = lcg_rand.random_unit_vec();
+  Vec3_128 scatter_dir = rand_vec + hit_rec->norm;
+
+  //  rays->dir = blend_vec256(&scatter_dir, &hit_rec->norm, near_zero(&scatter_dir));
+  rays->dir = scatter_dir;
+}
+
+[[nodiscard]] inline static float32x4_t reflectance(float32x4_t cos, float32x4_t ref_idx) {
+  float32x4_t ref_low = global::white - ref_idx;
+  float32x4_t ref_high = global::white + ref_idx;
+
+  //accuracy issues with reciprocal estimate
+  float32x4_t ref = vdivq_f32(ref_low, ref_high);
+  ref *= ref;
+
+  float32x4_t cos_sub = global::white - cos;
+  // cos_sub^5
+  float32x4_t cos_5 = cos_sub * cos_sub;
+  cos_5 *= cos_sub;
+  cos_5 *= cos_sub;
+  cos_5 *= cos_sub;
+
+  float32x4_t ref_sub = global::white - ref;
+
+  //inverted
+  return vmlaq_f32(ref, ref_sub, cos_5);
+}
+
+inline static void scatter_dielectric(RayCluster* rays, const HitRecords* hit_rec) {
+  float32x4_t ri = vbslq_f32(hit_rec->front_face, global::rcp_ir_vec, global::ir_vec);
+  Vec3_128 unit_dir = rays->dir;
+  normalize(&unit_dir);
+  
+  Vec3_128 inverse_unit_dir = -unit_dir;
+
+  float32x4_t cos_theta = dot(&inverse_unit_dir, &hit_rec->norm);
+  cos_theta = vminq_f32(cos_theta, global::white);
+
+  float32x4_t sin_theta = vsqrtq_f32(global::white - cos_theta * cos_theta);
+
+  uint32x4_t can_refract = vcleq_f32(ri * sin_theta, global::white);
+
+  float32x4_t ref = reflectance(cos_theta, ri);
+  float32x4_t rand_vec = lcg_rand.rand_in_range_128(0.f, 1.f);
+  uint32x4_t low_reflectance_loc = vcleq_f32(ref, rand_vec);
+  uint32x4_t refraction_loc = vandq_u32(can_refract, low_reflectance_loc);
+  uint32x4_t reflection_loc = veorq_u32(refraction_loc, global::all_set);
+
+  if (!testz_128(refraction_loc)) {
+    Vec3_128 refract_dir = refract(&unit_dir, &hit_rec->norm, ri);
+    rays->dir = blend_vec128(&rays->dir, &refract_dir, refraction_loc);
+  }
+  if (!testz_128(reflection_loc)) {
+    Vec3_128 reflect_dir = reflect(&unit_dir, &hit_rec->norm);
+    reflection_loc = vandq_u32(reflection_loc, hit_rec->front_face);
+    rays->dir = blend_vec128(&rays->dir, &reflect_dir, reflection_loc);
+  }
+}
+
+inline static void scatter(RayCluster* rays, const HitRecords* hit_rec) {
+  uint32x4_t metallic_type = vld1q_u32(metallic_types);
+  uint32x4_t lambertian_type = vld1q_u32(lambertian_types);
+  uint32x4_t dielectric_type = vld1q_u32(dielectric_types);
+
+  uint32x4_t metallic_loc = vceqq_u32(hit_rec->mat.type, metallic_type);
+  uint32x4_t lambertian_loc = vceqq_u32(hit_rec->mat.type, lambertian_type);
+  uint32x4_t dielectric_loc = vceqq_u32(hit_rec->mat.type, dielectric_type);
+
+  if (!testz_128(metallic_loc)) {
+    RayCluster metallic_rays = {
+        .dir = rays->dir,
+        .orig = hit_rec->orig,
+    };
+    scatter_metallic(&metallic_rays, hit_rec);
+
+    rays->dir = blend_vec128(&rays->dir, &metallic_rays.dir, metallic_loc);
+    rays->orig = blend_vec128(&rays->orig, &metallic_rays.orig, metallic_loc);
+  }
+  if (!testz_128(lambertian_loc)) {
+    RayCluster lambertian_rays = {
+        .dir = rays->dir,
+        .orig = hit_rec->orig,
+    };
+    scatter_lambertian(&lambertian_rays, hit_rec);
+
+    rays->dir = blend_vec128(&rays->dir, &lambertian_rays.dir, lambertian_loc);
+    rays->orig = blend_vec128(&rays->orig, &lambertian_rays.orig, lambertian_loc);
+  }
+  if (!testz_128(dielectric_loc)) {
+    RayCluster dielectric_rays = {
+        .dir = rays->dir,
+        .orig = hit_rec->orig,
+    };
+    scatter_dielectric(&dielectric_rays, hit_rec);
+
+    rays->dir = blend_vec128(&rays->dir, &dielectric_rays.dir, dielectric_loc);
+    rays->orig = blend_vec128(&rays->orig, &dielectric_rays.orig, dielectric_loc);
+  }
+}
+
+#else
+#include <immintrin.h>
 
 alignas(32) static const int metallic_types[8] = {
     MatType::metallic, MatType::metallic, MatType::metallic, MatType::metallic,
@@ -163,3 +301,5 @@ inline static void scatter(RayCluster* rays, const HitRecords* hit_rec) {
     rays->orig = blend_vec256(&rays->orig, &dielectric_rays.orig, (__m256)dielectric_loc);
   }
 }
+
+#endif
