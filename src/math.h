@@ -95,8 +95,8 @@ inline static Vec3_128 operator/(const Vec3_128& a, const Vec3_128& b) {
 }
 
 inline static Vec3_128& operator/=(Vec3_128& a, const float32x4_t& b) {
-
-  float32x4_t rcp_b = vrecpeq_f32(b);
+  //accuracy issue with reciprocal
+  float32x4_t rcp_b = vdivq_f32(global::ones, b);
 
   a.x = vmulq_f32(a.x, rcp_b);
   a.y = vmulq_f32(a.y, rcp_b);
@@ -129,6 +129,15 @@ inline static Vec3_128& operator&=(Vec3_128& a, const uint32x4_t& b) {
   return a;
 }
 
+inline static float32x4_t rsqrt(float32x4_t x)
+{
+  float32x4_t rsqrt_estimate = vrsqrteq_f32(x);
+
+  //Newton-Raphson 16 bit
+  float32x4_t step1 = vrsqrtsq_f32(vmulq_f32(rsqrt_estimate, rsqrt_estimate), x);
+  return vmulq_f32(rsqrt_estimate, step1);
+}
+
 [[nodiscard]] inline static float32x4_t dot(const Vec3_128* a, const Vec3_128* b) {
   float32x4_t dot = vmulq_f32(a->x, b->x);
 
@@ -150,10 +159,9 @@ inline static Vec3_128& operator&=(Vec3_128& a, const uint32x4_t& b) {
 }
 
 [[nodiscard]] inline static Vec3_128 refract(const Vec3_128* ray_dir, const Vec3_128* norm,
-                                             float32x4_t ratio) {
-  //nu macell ???                                          
+                                             float32x4_t ratio) {                                     
   Vec3_128 inverted_ray_dir = -*ray_dir;
-  float32x4_t cos_theta = vminq_f32(dot(&inverted_ray_dir, norm), global::white);
+  float32x4_t cos_theta = vminq_f32(dot(&inverted_ray_dir, norm), global::ones);
 
   //inverted
   Vec3_128 r_out_perp = {
@@ -163,16 +171,13 @@ inline static Vec3_128& operator&=(Vec3_128& a, const uint32x4_t& b) {
   };
   r_out_perp *= ratio;
 
-  float32x4_t r_out_parallel_scale = global::white - dot(&r_out_perp, &r_out_perp);
+  float32x4_t r_out_parallel_scale = global::ones - dot(&r_out_perp, &r_out_perp);
 
   r_out_parallel_scale = abs_128(r_out_parallel_scale);
 
   // square then negate
-  //float32x4_t parallel_scale_rsqrt = vrsqrteq_f32(r_out_parallel_scale);
-  //r_out_parallel_scale *= -parallel_scale_rsqrt;
-
-  //square then negate = -sqrt(x)
-  r_out_parallel_scale = vnegq_f32(vsqrtq_f32(r_out_parallel_scale));
+  float32x4_t parallel_scale_rsqrt = rsqrt(r_out_parallel_scale);
+  r_out_parallel_scale *= -parallel_scale_rsqrt;
 
   //inverted
   return Vec3_128{
@@ -184,7 +189,7 @@ inline static Vec3_128& operator&=(Vec3_128& a, const uint32x4_t& b) {
 
 inline static void normalize(Vec3_128* vec) {
   float32x4_t vec_len_2 = dot(vec, vec);
-  float32x4_t recip_len = vrsqrteq_f32(vec_len_2);
+  float32x4_t recip_len = rsqrt(vec_len_2);//vrsqrteq_f32(vec_len_2);
 
   *vec *= recip_len;
 }

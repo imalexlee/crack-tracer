@@ -68,10 +68,9 @@ inline static void init_spheres() {
   float32x4_t c = dot(&oc, &oc) - rad_2_vec;
 
   float32x4_t ac = vmulq_f32(a, c);
-  float32x4_t nac = vnegq_f32(ac); //negate
 
   //inverted
-  float32x4_t discrim = vmlaq_f32(nac, b, b);
+  float32x4_t discrim = vmlaq_f32(-ac, b, b);
 
   uint32x4_t hit_loc = vcgeq_f32(discrim, global::zeros);
 
@@ -86,8 +85,9 @@ inline static void init_spheres() {
   b = vbslq_f32(hit_loc, b, global::zeros);
 
   float32x4_t sqrt_d = vsqrtq_f32(discrim);
-  float32x4_t recip_a = vrecpeq_f32(a);
 
+  //reciprocal estimate is inaccurate for these tasks
+  float32x4_t recip_a = vdivq_f32(global::ones, a); 
   float32x4_t root = vmulq_f32(vsubq_f32(b, sqrt_d), recip_a);
 
   // allow through roots within the max t value

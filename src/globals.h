@@ -37,7 +37,7 @@ namespace global {
   constexpr float sample_du = pix_du / 9;
   constexpr float sample_dv = pix_dv / (sample_group_num + 1);
   constexpr float focal_len = 1.0;
-  constexpr float color_multiplier = 255.f / (sample_group_num * 8);
+  constexpr float color_multiplier = 255.f / (sample_group_num * 4);
   constexpr float single_color_multiplier = 255.f;
   constexpr uint8_t thread_count = 4;
   constexpr RenderMode active_render_mode = RenderMode::png;
@@ -51,7 +51,8 @@ namespace global {
   const uint32x4_t sign_bit = vdupq_n_u32((uint32_t)1u << 31);
   const uint32x4_t all_set = vceqq_f32(vdupq_n_f32(0.0f), vdupq_n_f32(0.0f));
   constexpr float32x4_t zeros = {0, 0, 0, 0};
-  constexpr float32x4_t white = {1.f, 1.f, 1.f, 1.f};
+  constexpr float32x4_t ones = {1.f, 1.f, 1.f, 1.f};
+  constexpr float32x4_t white = ones;
   constexpr float t_min = 0.0013f;
   const float32x4_t t_min_vec = {t_min, t_min, t_min, t_min};
   const Color_128 background_color = {.x = white, .y = white, .z = white};

@@ -76,8 +76,8 @@ inline static void scatter_lambertian(RayCluster* rays, const HitRecords* hit_re
   float32x4_t ref_low = global::white - ref_idx;
   float32x4_t ref_high = global::white + ref_idx;
 
-  ref_high = vrecpeq_f32(ref_high);
-  float32x4_t ref = ref_low * ref_high;
+  //accuracy issues with reciprocal estimate
+  float32x4_t ref = vdivq_f32(ref_low, ref_high);
   ref *= ref;
 
   float32x4_t cos_sub = global::white - cos;
@@ -94,8 +94,6 @@ inline static void scatter_lambertian(RayCluster* rays, const HitRecords* hit_re
 }
 
 inline static void scatter_dielectric(RayCluster* rays, const HitRecords* hit_rec) {
-
-  //float32x4_t ri = vbslq_f32(hit_rec->front_face, global::ir_vec, global::rcp_ir_vec);
   float32x4_t ri = vbslq_f32(hit_rec->front_face, global::rcp_ir_vec, global::ir_vec);
   Vec3_128 unit_dir = rays->dir;
   normalize(&unit_dir);
